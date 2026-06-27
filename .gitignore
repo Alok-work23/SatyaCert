@@ -3,3 +3,8 @@ __pycache__/
 extracted_json/
 uploads/
 backend/.env
+node_modules/
+
+.env
+
+backend/.env
