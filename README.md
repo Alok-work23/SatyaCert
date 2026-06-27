@@ -1,138 +1,453 @@
-# 🌟 Document Authenticity — Frontend + Backend 
+```md
+<h1 align="center">🎓 SatyaCert</h1>
 
 <p align="center">
-  <img src="https://readme-typing-svg.herokuapp.com?size=27&duration=3000&color=00ADEF&center=true&vCenter=true&width=900&lines=Document+Authenticity;React+(TypeScript)+%2B+Python+Backend;Vite+%2B+Tailwind" alt="typing" />
+AI-Powered Academic Certificate Verification Platform
+</p>
+
+<p align="center">
+🏆 Smart India Hackathon 2024 Grand Finale Finalist <br>
+Built for the Department of Higher Education, Government of Jharkhand
+</p>
+
+<p align="center">
+
+![React](https://img.shields.io/badge/React-18-61DAFB?style=for-the-badge&logo=react)
+![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript)
+![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi)
+![MongoDB](https://img.shields.io/badge/MongoDB-47A248?style=for-the-badge&logo=mongodb)
+![Firebase](https://img.shields.io/badge/Firebase-FFCA28?style=for-the-badge&logo=firebase)
+![TailwindCSS](https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=for-the-badge&logo=tailwind-css)
+![Vite](https://img.shields.io/badge/Vite-646CFF?style=for-the-badge&logo=vite)
+
 </p>
 
 ---
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge)]()
-![Repo size](https://img.shields.io/github/repo-size/srivastavHimanshu4503/your-repo?style=for-the-badge)
-![Top language](https://img.shields.io/github/languages/top/srivastavHimanshu4503/your-repo?style=for-the-badge)
-![Last commit](https://img.shields.io/github/last-commit/srivastavHimanshu4503/your-repo?style=for-the-badge)
+# 📖 Overview
+
+**SatyaCert** is an AI-powered academic certificate verification platform that detects forged marksheets and degrees by combining **OCR-based document extraction**, **database validation**, and **field-level comparison**.
+
+Instead of relying on slow manual verification, SatyaCert enables universities, employers, government agencies, and citizens to verify certificates instantly with an authenticity verdict and fraud risk assessment.
+
+The project was developed during the **Smart India Hackathon 2024 Grand Finale** under the **Department of Higher Education, Government of Jharkhand**.
 
 ---
 
-## 🚀 About
-A clean demo for a Document Authenticity & Comparison web application. Frontend is a Vite + React (TypeScript) project with Tailwind; backend contains Python utilities (scripts for extraction/compare) and a simple server endpoint to accept uploads. README reflects the repository structure shown in the screenshots.
+# ❗ Problem Statement
+
+Fake academic certificates are increasingly being used for admissions, employment, and government recruitment.
+
+Traditional verification methods are:
+
+- Time-consuming
+- Manual
+- Error-prone
+- Difficult to scale
+- Vulnerable to manipulation
+
+SatyaCert automates the entire verification workflow using OCR, AI-assisted data extraction, and secure comparison against institution-approved records.
 
 ---
 
-## 🧩 Features
-- React + TypeScript frontend with modular page/components structure.
-- Document upload flow + comparison display page.
-- Admin / Institution / User dashboards (scaffolds).
-- Python backend scripts for JSON extraction, comparison and a simple `main.py` for integration/testing.
-- `downloads/` for storing generated comparison results or processed files.
+# ✨ Features
+
+## 📄 Certificate Verification
+
+- Upload academic certificate PDFs
+- Extract student information automatically
+- Compare with verified institutional records
+- Generate authenticity verdict
 
 ---
 
-## 🛠 Tech Stack
-- ![React](https://img.shields.io/badge/React-61DAFB?style=for-the-badge&logo=react&logoColor=black)
-- ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
-- ![Vite](https://img.shields.io/badge/Vite-646CFF?style=for-the-badge&logo=vite&logoColor=white)
-- ![TailwindCSS](https://img.shields.io/badge/Tailwind-CB3837?style=for-the-badge&logo=tailwindcss&logoColor=white)
-- ![Node.js](https://img.shields.io/badge/Node.js-339933?style=for-the-badge&logo=node.js&logoColor=white)
-- Python (scripts inside `/backend`) — OCR / data extract utilities
+## 🔍 OCR-Based Extraction
+
+Uses **pdfplumber** to extract:
+
+- Student Name
+- Roll Number
+- University
+- Semester
+- SGPA
+- CGPA
+- Subject-wise Marks
+- Result Status
+
+Supports:
+
+- Multi-page PDFs
+- Embedded tables
+- Structured marksheets
 
 ---
 
-## 📁 Project file structure (as in screenshots)
+## 🛡 Forgery Detection Engine
 
-```bash
-SRC/
-├─ backend/
-│ ├─ pycache/
-│ ├─ downloads/ # generated outputs / processed files
-│ ├─ add.py # helper script
-│ ├─ compare_json.py # comparison logic (JSON comparator)
-│ ├─ extract_json.py # extraction logic (from OCR / pdf)
-│ └─ main.py # lightweight server or orchestration entry
-├─ node_modules/
-├─ src/ # frontend source
-│ ├─ components/
-│ │ ├─ DocumentAuthenticityForm.tsx
-│ │ ├─ Footer.tsx
-│ │ └─ Navbar.tsx
-│ ├─ pages/
-│ │ ├─ AdminAuth.tsx
-│ │ ├─ AdminDashboard.tsx
-│ │ ├─ Auth.tsx
-│ │ ├─ AuthTab.tsx
-│ │ ├─ CitizenLoginForm.tsx
-│ │ ├─ DocumentAuthenticityPage.tsx
-│ │ ├─ DocumentComparisonDisplay.tsx
-│ │ ├─ InstitutionDashboard.tsx
-│ │ ├─ InstitutionProfile.tsx
-│ │ ├─ InstitutionRegistration.tsx
-│ │ ├─ LandingPage.tsx
-│ │ ├─ OrganisationDashboard.tsx
-│ │ ├─ OrganisationRegistration.tsx
-│ │ ├─ ProfilePage.tsx
-│ │ ├─ StandardLoginForm.tsx
-│ │ ├─ UploadDoc.tsx
-│ │ ├─ UserDashboard.tsx
-│ │ ├─ VerificationFlow.tsx
-│ │ └─ UploadDoc.css
-│ ├─ services/
-│ │ └─ App.tsx
-│ ├─ constants.ts
-│ ├─ firebaseConfig.ts
-│ ├─ index.css
-│ ├─ main.tsx
-│ └─ types.ts
-├─ .env
-├─ index.html
-├─ local_setup.js
-├─ package-lock.json
-├─ package.json
-├─ postcss.config.js
-├─ server.js
-├─ tailwind.config.js
-├─ tsconfig.app.json
-├─ tsconfig.json
-├─ tsconfig.node.json
-└─ vite.config.ts
+The comparison engine recursively validates extracted fields against MongoDB records.
+
+Critical mismatches include:
+
+- Student Name
+- Roll Number
+- CGPA
+- SGPA
+- Result Status
+
+Minor differences are reported separately.
+
+Risk Levels:
+
 ```
 
---- 
+NONE
+LOW
+MEDIUM
+HIGH
+
+````
 
 ---
 
-## ⚡ Quick start
+## 👥 Multi-Role Authentication
 
-### Frontend
-```bash
-# from repository root
-cd src         # or wherever package.json is located (root in screenshots)
-npm install
-npm run dev
-# build for production
-npm run build
+### 👤 Citizen
+
+- Google OAuth login
+- Upload certificates
+- Verify authenticity
+
+### 🏫 Institution
+
+- Email authentication
+- Upload authentic student records
+- Maintain trusted certificate database
+
+### 🏢 Organisation
+
+- Employer login
+- Verify candidate certificates
+- View verification reports
+
+### ⚙ Admin
+
+- Approve institutions
+- Monitor verification activity
+- Track forgery statistics
+
+---
+
+# ⚙ Verification Workflow
+
+```text
+                Upload Certificate
+                        │
+                        ▼
+               FastAPI Backend
+                        │
+                        ▼
+             pdfplumber OCR Engine
+                        │
+                        ▼
+            Extract Academic Fields
+                        │
+                        ▼
+      MongoDB Certificate Record Lookup
+                        │
+                        ▼
+        Recursive JSON Comparison Engine
+                        │
+                        ▼
+     Authenticity + Fraud Risk Assessment
+                        │
+                        ▼
+         React Dashboard Displays Result
+````
+
+---
+
+# 🏗 Architecture
+
+```text
+User
+ │
+ ▼
+React Frontend
+ │
+ ▼
+FastAPI Backend
+ │
+ ├── OCR (pdfplumber)
+ │
+ ├── Field Extraction
+ │
+ ├── MongoDB Lookup
+ │
+ └── Comparison Engine
+ │
+ ▼
+Verification Result
 ```
 
 ---
 
+# 🛠 Tech Stack
+
+| Layer          | Technology                                  |
+| -------------- | ------------------------------------------- |
+| Frontend       | React 18 + TypeScript + Vite + Tailwind CSS |
+| Backend        | FastAPI + Python                            |
+| OCR Engine     | pdfplumber                                  |
+| Database       | MongoDB Atlas                               |
+| Authentication | Firebase Authentication                     |
+| Storage        | Cloudinary                                  |
+| HTTP Client    | httpx                                       |
+| Server         | Uvicorn                                     |
+
+---
+
+# 📁 Project Structure
+
+```text
+SatyaCert
+│
+├── backend
+│   ├── main.py
+│   ├── extract_json.py
+│   ├── compare_json.py
+│   ├── requirements.txt
+│   └── downloads/
+│
+├── src
+│   ├── components/
+│   ├── pages/
+│   ├── services/
+│   ├── firebaseConfig.ts
+│   ├── types.ts
+│   └── App.tsx
+│
+├── public/
+├── package.json
+├── vite.config.ts
+└── README.md
+```
+
+---
+
+# 🚀 Getting Started
+
+## Clone Repository
+
 ```bash
-# recommended: create a venv
-cd ./backend # or whereever the backend folder exists in the root directory
+git clone https://github.com/Alok-work23/SatyaCert.git
+
+cd SatyaCert
+```
+
+---
+
+# Backend Setup
+
+```bash
+cd backend
+
 python -m venv .venv
-# activate .venv (mac/linux)
-source .venv/bin/activate
-# activate .venv (windows)
-.venv\Scripts\activate
+```
 
-pip install -r requirements.txt   # create this file listing Flask, pypdf, pytesseract, etc.
-# run a simple orchestrator / test harness
+### Windows
+
+```bash
+.venv\Scripts\activate
+```
+
+### Linux / macOS
+
+```bash
+source .venv/bin/activate
+```
+
+Install dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+Create `.env`
+
+```env
+ATLAS_DB_URL=your_mongodb_connection_string
+
+DB_NAME=academia_authenticator
+
+COLLECTION_NAME=marksheets
+```
+
+Run backend
+
+```bash
 python main.py
 ```
 
-## 📬 Contact & links
+Backend runs at
 
-GitHub: https://github.com/srivastavHimanshu4503
+```
+http://localhost:8000
+```
 
-LinkedIn: https://www.linkedin.com/in/himanshu-srivastav-3117a4269
+Swagger Docs
 
-## 📝 License
+```
+http://localhost:8000/docs
+```
 
-MIT — feel free to adapt and reuse.
+---
+
+# Frontend Setup
+
+Install dependencies
+
+```bash
+npm install
+```
+
+Create `.env`
+
+```env
+VITE_API_KEY=
+
+VITE_AUTH_DOMAIN=
+
+VITE_PROJECT_ID=
+
+VITE_STORAGE_BUCKET=
+
+VITE_MESSAGING_SENDER_ID=
+
+VITE_APP_ID=
+
+VITE_API_URL=http://127.0.0.1:8000
+```
+
+Run frontend
+
+```bash
+npm run dev
+```
+
+Application
+
+```
+http://localhost:5173
+```
+
+---
+
+# 🔌 API Endpoints
+
+| Method | Endpoint              | Description                         |
+| ------ | --------------------- | ----------------------------------- |
+| POST   | `/verify/`            | Verify certificate authenticity     |
+| POST   | `/uploadMongo`        | Upload verified records             |
+| POST   | `/uploadFile/`        | Extract document fields             |
+| POST   | `/save-pdf-to-server` | Download Cloudinary PDF and process |
+| GET    | `/`                   | Health Check                        |
+
+---
+
+# 💡 Why SatyaCert?
+
+SatyaCert combines multiple technologies into one secure verification pipeline.
+
+✔ OCR-powered field extraction
+
+✔ AI-assisted document parsing
+
+✔ Secure MongoDB validation
+
+✔ Recursive field comparison
+
+✔ Risk-based fraud detection
+
+✔ Role-based authentication
+
+✔ Institution-managed trusted database
+
+Unlike manual verification, SatyaCert delivers results within seconds while reducing human error and improving trust.
+
+---
+
+# 🚀 Future Enhancements
+
+* Blockchain-backed certificate hashing
+* QR-code verification
+* Digital signature support
+* AI-based OCR correction
+* University ERP integration
+* Analytics dashboard
+* Email verification reports
+* REST API for third-party integrations
+
+---
+
+# 🏆 Achievement
+
+**Smart India Hackathon 2024 – Grand Finale**
+
+Problem Statement:
+
+> Fake Degree / Certificate Recognition System
+
+Ministry:
+
+**Department of Higher Education**
+
+Government of Jharkhand
+
+---
+
+# 👨‍💻 Team
+
+Developed during **Smart India Hackathon Grand Finale 2025**
+
+Team Name:
+
+```
+Viking Validators
+```
+
+Members
+
+* Alok Raj
+* Himanshu Srivastav
+* Disha Sahu
+* Vishal Kumar
+* Rajiv Kumar
+* Chandan Giri
+
+---
+
+# 👤 Author
+
+**Alok Raj**
+
+GitHub
+
+https://github.com/Alok-work23
+
+
+---
+
+# ⭐ Support
+
+If you found this project useful, consider giving it a ⭐ on GitHub.
+
+It helps others discover the project and motivates further development.
+
+---
+
+# 📜 License
+
+This project is licensed under the MIT License.
+
+```
+```
