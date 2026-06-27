@@ -1,13 +1,11 @@
-```md
-<h1 align="center">🎓 SatyaCert</h1>
+# 🎓 SatyaCert
 
 <p align="center">
-AI-Powered Academic Certificate Verification Platform
+  <img src="https://readme-typing-svg.herokuapp.com?font=Poppins&size=28&duration=3500&pause=1000&color=2563EB&center=true&vCenter=true&width=900&lines=AI-Powered+Academic+Certificate+Verification;Smart+India+Hackathon+2025+Grand+Finalist;Built+for+the+Department+of+Higher+Education" alt="Typing SVG" />
 </p>
 
 <p align="center">
-🏆 Smart India Hackathon 2024 Grand Finale Finalist <br>
-Built for the Department of Higher Education, Government of Jharkhand
+An intelligent platform for detecting forged academic certificates using OCR, secure database validation, and automated field-level verification.
 </p>
 
 <p align="center">
@@ -17,216 +15,163 @@ Built for the Department of Higher Education, Government of Jharkhand
 ![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi)
 ![MongoDB](https://img.shields.io/badge/MongoDB-47A248?style=for-the-badge&logo=mongodb)
 ![Firebase](https://img.shields.io/badge/Firebase-FFCA28?style=for-the-badge&logo=firebase)
-![TailwindCSS](https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=for-the-badge&logo=tailwind-css)
+![Tailwind CSS](https://img.shields.io/badge/TailwindCSS-38BDF8?style=for-the-badge&logo=tailwind-css)
 ![Vite](https://img.shields.io/badge/Vite-646CFF?style=for-the-badge&logo=vite)
+![Repo size](https://img.shields.io/github/repo-size/Alok-work23/SatyaCert?style=for-the-badge)
+![Last commit](https://img.shields.io/github/last-commit/Alok-work23/SatyaCert?style=for-the-badge)
 
+</p>
+
+<p align="center">
+🏆 <b>Smart India Hackathon 2025 – Grand Finale</b><br/>
+Built for the <b>Department of Higher Education, Government of Jharkhand</b>
 </p>
 
 ---
 
-# 📖 Overview
+## 📖 Overview
 
-**SatyaCert** is an AI-powered academic certificate verification platform that detects forged marksheets and degrees by combining **OCR-based document extraction**, **database validation**, and **field-level comparison**.
+**SatyaCert** is an AI-powered academic certificate verification platform designed to combat fake degrees and forged marksheets.
 
-Instead of relying on slow manual verification, SatyaCert enables universities, employers, government agencies, and citizens to verify certificates instantly with an authenticity verdict and fraud risk assessment.
+The system extracts structured information from uploaded certificates, compares it against institution-approved records stored in MongoDB, and generates an authenticity report with a fraud risk score.
 
-The project was developed during the **Smart India Hackathon 2024 Grand Finale** under the **Department of Higher Education, Government of Jharkhand**.
-
----
-
-# ❗ Problem Statement
-
-Fake academic certificates are increasingly being used for admissions, employment, and government recruitment.
-
-Traditional verification methods are:
-
-- Time-consuming
-- Manual
-- Error-prone
-- Difficult to scale
-- Vulnerable to manipulation
-
-SatyaCert automates the entire verification workflow using OCR, AI-assisted data extraction, and secure comparison against institution-approved records.
+Instead of relying on slow manual verification, SatyaCert enables educational institutions, employers, government agencies, and citizens to verify academic credentials within seconds.
 
 ---
 
-# ✨ Features
+## ❗ The Problem
 
-## 📄 Certificate Verification
+Fake academic certificates are increasingly used during:
 
-- Upload academic certificate PDFs
-- Extract student information automatically
-- Compare with verified institutional records
-- Generate authenticity verdict
+- 🎓 University admissions
+- 💼 Job recruitment
+- 🏛 Government verification
+- 📑 Scholarship applications
 
----
-
-## 🔍 OCR-Based Extraction
-
-Uses **pdfplumber** to extract:
-
-- Student Name
-- Roll Number
-- University
-- Semester
-- SGPA
-- CGPA
-- Subject-wise Marks
-- Result Status
-
-Supports:
-
-- Multi-page PDFs
-- Embedded tables
-- Structured marksheets
+Traditional verification is manual, time-consuming, expensive, difficult to scale, and prone to human error. SatyaCert automates this through OCR, secure database comparison, and intelligent fraud detection.
 
 ---
 
-## 🛡 Forgery Detection Engine
+## ✨ Key Features
 
-The comparison engine recursively validates extracted fields against MongoDB records.
+### 📄 Certificate Verification
+- Upload certificate PDFs
+- Automatic OCR-based field extraction
+- Cross-reference against institutional database
+- Instant authenticity verdict
 
-Critical mismatches include:
+### 🔍 OCR Pipeline
+Extracts: Student Name, Roll Number, Registration Number, University, Semester, SGPA, CGPA, Subject-wise Marks, Result Status
 
-- Student Name
-- Roll Number
-- CGPA
-- SGPA
-- Result Status
+Supports: Multi-page PDFs, embedded tables, complex marksheets
 
-Minor differences are reported separately.
+### 🛡️ Forgery Detection
+The comparison engine recursively validates every extracted field against institutional records.
 
-Risk Levels:
+Critical fields: Student Name, Roll Number, CGPA, SGPA, Result Status
+
+| Risk | Meaning |
+|---|---|
+| 🟢 NONE | Certificate is authentic |
+| 🟡 LOW | Minor formatting differences |
+| 🟠 MEDIUM | Suspicious mismatches |
+| 🔴 HIGH | Possible forged certificate |
+
+### 👥 Multi-Role Authentication
+
+| Role | Auth Method | Capabilities |
+|---|---|---|
+| 👤 Citizen | Google OAuth | Upload & verify certificates |
+| 🏫 Institution | Email/Password | Upload authentic records |
+| 🏢 Organisation | Email/Password | Verify candidate certificates |
+| ⚙️ Admin | Email/Password | Approve institutions, monitor forgery stats |
+
+---
+
+## ⚙️ Verification Workflow
 
 ```
-
-NONE
-LOW
-MEDIUM
-HIGH
-
-````
-
----
-
-## 👥 Multi-Role Authentication
-
-### 👤 Citizen
-
-- Google OAuth login
-- Upload certificates
-- Verify authenticity
-
-### 🏫 Institution
-
-- Email authentication
-- Upload authentic student records
-- Maintain trusted certificate database
-
-### 🏢 Organisation
-
-- Employer login
-- Verify candidate certificates
-- View verification reports
-
-### ⚙ Admin
-
-- Approve institutions
-- Monitor verification activity
-- Track forgery statistics
-
----
-
-# ⚙ Verification Workflow
-
-```text
-                Upload Certificate
-                        │
-                        ▼
-               FastAPI Backend
-                        │
-                        ▼
-             pdfplumber OCR Engine
-                        │
-                        ▼
-            Extract Academic Fields
-                        │
-                        ▼
-      MongoDB Certificate Record Lookup
-                        │
-                        ▼
-        Recursive JSON Comparison Engine
-                        │
-                        ▼
-     Authenticity + Fraud Risk Assessment
-                        │
-                        ▼
-         React Dashboard Displays Result
-````
-
----
-
-# 🏗 Architecture
-
-```text
-User
- │
- ▼
-React Frontend
- │
- ▼
-FastAPI Backend
- │
- ├── OCR (pdfplumber)
- │
- ├── Field Extraction
- │
- ├── MongoDB Lookup
- │
- └── Comparison Engine
- │
- ▼
-Verification Result
+        Upload Certificate PDF
+                  │
+                  ▼
+        FastAPI Verification API
+                  │
+                  ▼
+      OCR & Data Extraction (pdfplumber)
+                  │
+                  ▼
+      Extract Student Information
+                  │
+                  ▼
+      MongoDB Record Lookup
+                  │
+                  ▼
+    Recursive Field Comparison Engine
+                  │
+                  ▼
+    Authenticity & Fraud Risk Analysis
+                  │
+                  ▼
+       Verification Report Displayed
 ```
 
 ---
 
-# 🛠 Tech Stack
+## 🏗️ System Architecture
 
-| Layer          | Technology                                  |
-| -------------- | ------------------------------------------- |
-| Frontend       | React 18 + TypeScript + Vite + Tailwind CSS |
-| Backend        | FastAPI + Python                            |
-| OCR Engine     | pdfplumber                                  |
-| Database       | MongoDB Atlas                               |
-| Authentication | Firebase Authentication                     |
-| Storage        | Cloudinary                                  |
-| HTTP Client    | httpx                                       |
-| Server         | Uvicorn                                     |
+```
+           React Frontend (Vite + TypeScript)
+                        │
+                        ▼
+              FastAPI Backend (Python)
+                        │
+         ┌──────────────┼──────────────┐
+         │              │              │
+         ▼              ▼              ▼
+    OCR Engine      MongoDB        Comparison
+  (pdfplumber)   Atlas Lookup       Engine
+         │                             │
+         └─────────────┬───────────────┘
+                       ▼
+              Verification Verdict
+         (is_authentic, risk_level, diff)
+```
 
 ---
 
-# 📁 Project Structure
+## 🛠️ Tech Stack
 
-```text
-SatyaCert
-│
-├── backend
-│   ├── main.py
-│   ├── extract_json.py
-│   ├── compare_json.py
-│   ├── requirements.txt
-│   └── downloads/
-│
-├── src
-│   ├── components/
-│   ├── pages/
+| Category | Technology |
+|---|---|
+| Frontend | React 18 + TypeScript + Vite |
+| Styling | Tailwind CSS |
+| Backend | FastAPI + Python |
+| OCR | pdfplumber |
+| Database | MongoDB Atlas |
+| Authentication | Firebase Auth (Google OAuth + Email) |
+| Storage | Cloudinary |
+| HTTP Client | httpx (async) |
+| Server | Uvicorn |
+
+---
+
+## 📂 Project Structure
+
+```
+SatyaCert/
+├── backend/
+│   ├── main.py              # FastAPI app — all endpoints
+│   ├── extract_json.py      # OCR pipeline using pdfplumber
+│   ├── compare_json.py      # Recursive diff engine + forgery verdict
+│   └── requirements.txt
+├── src/
+│   ├── components/          # Navbar, Footer, DocumentAuthenticityForm
+│   ├── pages/               # LandingPage, Auth, Dashboards, VerificationFlow
 │   ├── services/
+│   │   └── api.ts           # Firebase + FastAPI integration layer
 │   ├── firebaseConfig.ts
 │   ├── types.ts
 │   └── App.tsx
-│
-├── public/
 ├── package.json
 ├── vite.config.ts
 └── README.md
@@ -234,220 +179,139 @@ SatyaCert
 
 ---
 
-# 🚀 Getting Started
+## 🚀 Getting Started
 
-## Clone Repository
+### Clone the Repository
 
 ```bash
 git clone https://github.com/Alok-work23/SatyaCert.git
-
 cd SatyaCert
 ```
 
----
-
-# Backend Setup
+### Backend Setup
 
 ```bash
 cd backend
-
 python -m venv .venv
-```
 
-### Windows
-
-```bash
+# Windows
 .venv\Scripts\activate
-```
-
-### Linux / macOS
-
-```bash
+# Linux / macOS
 source .venv/bin/activate
-```
 
-Install dependencies
-
-```bash
 pip install -r requirements.txt
 ```
 
-Create `.env`
-
+Create `backend/.env`:
 ```env
 ATLAS_DB_URL=your_mongodb_connection_string
-
 DB_NAME=academia_authenticator
-
 COLLECTION_NAME=marksheets
 ```
 
-Run backend
-
+Run:
 ```bash
 python main.py
+# API: http://localhost:8000
+# Swagger Docs: http://localhost:8000/docs
 ```
 
-Backend runs at
-
-```
-http://localhost:8000
-```
-
-Swagger Docs
-
-```
-http://localhost:8000/docs
-```
-
----
-
-# Frontend Setup
-
-Install dependencies
+### Frontend Setup
 
 ```bash
 npm install
 ```
 
-Create `.env`
-
+Create `.env` in project root:
 ```env
-VITE_API_KEY=
-
-VITE_AUTH_DOMAIN=
-
-VITE_PROJECT_ID=
-
-VITE_STORAGE_BUCKET=
-
-VITE_MESSAGING_SENDER_ID=
-
-VITE_APP_ID=
-
+VITE_API_KEY=your_firebase_api_key
+VITE_AUTH_DOMAIN=your_project.firebaseapp.com
+VITE_PROJECT_ID=your_project_id
+VITE_STORAGE_BUCKET=your_project.appspot.com
+VITE_MESSAGING_SENDER_ID=your_sender_id
+VITE_APP_ID=your_app_id
 VITE_API_URL=http://127.0.0.1:8000
 ```
 
-Run frontend
-
+Run:
 ```bash
 npm run dev
-```
-
-Application
-
-```
-http://localhost:5173
+# App: http://localhost:5173
 ```
 
 ---
 
-# 🔌 API Endpoints
+## 🔌 API Endpoints
 
-| Method | Endpoint              | Description                         |
-| ------ | --------------------- | ----------------------------------- |
-| POST   | `/verify/`            | Verify certificate authenticity     |
-| POST   | `/uploadMongo`        | Upload verified records             |
-| POST   | `/uploadFile/`        | Extract document fields             |
-| POST   | `/save-pdf-to-server` | Download Cloudinary PDF and process |
-| GET    | `/`                   | Health Check                        |
-
----
-
-# 💡 Why SatyaCert?
-
-SatyaCert combines multiple technologies into one secure verification pipeline.
-
-✔ OCR-powered field extraction
-
-✔ AI-assisted document parsing
-
-✔ Secure MongoDB validation
-
-✔ Recursive field comparison
-
-✔ Risk-based fraud detection
-
-✔ Role-based authentication
-
-✔ Institution-managed trusted database
-
-Unlike manual verification, SatyaCert delivers results within seconds while reducing human error and improving trust.
+| Method | Endpoint | Description |
+|---|---|---|
+| `POST` | `/verify/` | Upload PDF → extract → compare → verdict |
+| `POST` | `/uploadMongo` | Institution uploads authentic certificate to DB |
+| `POST` | `/uploadFile/` | Upload PDF and extract fields only |
+| `POST` | `/save-pdf-to-server` | Fetch and process PDF from Cloudinary URL |
+| `GET` | `/` | Health check |
 
 ---
 
-# 🚀 Future Enhancements
+## 🚀 Future Enhancements
 
-* Blockchain-backed certificate hashing
-* QR-code verification
-* Digital signature support
-* AI-based OCR correction
-* University ERP integration
-* Analytics dashboard
-* Email verification reports
-* REST API for third-party integrations
-
----
-
-# 🏆 Achievement
-
-**Smart India Hackathon 2024 – Grand Finale**
-
-Problem Statement:
-
-> Fake Degree / Certificate Recognition System
-
-Ministry:
-
-**Department of Higher Education**
-
-Government of Jharkhand
+- 🔗 Blockchain-backed certificate hashes
+- 📱 QR Code verification
+- ✍️ Digital signature support
+- 🤖 AI-powered OCR correction
+- 📊 Advanced analytics dashboard
+- 🏫 University ERP integration
+- 📧 Email verification reports
+- 🌐 Public verification API
 
 ---
 
-# 👨‍💻 Team
+## 🏆 Achievement
 
-Developed during **Smart India Hackathon Grand Finale 2025**
+**Smart India Hackathon 2025 – Grand Finale**
 
-Team Name:
+> Problem Statement: Fake Degree / Certificate Recognition System
 
-```
-Viking Validators
-```
-
-Members
-
-* Alok Raj
-* Himanshu Srivastav
-* Disha Sahu
-* Vishal Kumar
-* Rajiv Kumar
-* Chandan Giri
+Ministry: Department of Higher Education, Government of Jharkhand
 
 ---
 
-# 👤 Author
+## 👨‍💻 Team — Viking Validators
+
+Member 
+- Alok Raj
+- Himanshu Srivastav
+- Disha Sahu
+- Vishal Kumar
+- Rajiv Kumar
+- Chandan Giri (Team Lead)
+
+---
+
+## 👤 Author
 
 **Alok Raj**
 
-GitHub
-
-https://github.com/Alok-work23
-
+🐙 GitHub: [@Alok-work23](https://github.com/Alok-work23)  
 
 ---
 
-# ⭐ Support
+## 🤝 Contributing
 
-If you found this project useful, consider giving it a ⭐ on GitHub.
-
-It helps others discover the project and motivates further development.
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/your-feature`)
+3. Commit your changes (`git commit -m 'feat: add your feature'`)
+4. Push to the branch (`git push origin feature/your-feature`)
+5. Open a Pull Request
 
 ---
 
-# 📜 License
+## ⭐ Show Your Support
 
-This project is licensed under the MIT License.
+If you found this project useful, please consider giving it a ⭐ on GitHub — it helps others discover the project and motivates continued development.
 
-```
-```
+---
+
+## 📄 License
+
+This project is licensed under the **MIT License**.
