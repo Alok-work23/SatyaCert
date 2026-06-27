@@ -12,38 +12,44 @@ import { ProfilePage } from './pages/ProfilePage';
 import { InstitutionRegistration } from './pages/InstitutionRegistration';
 import { OrganisationRegistration } from './pages/OrganisationRegistration';
 import { OrganisationDashboard } from './pages/OrganisationDashboard';
-
-import { DocumentAuthenticityForm } from "./components/DocumentAuthenticityForm";
-
+import { DocumentAuthenticityForm } from './components/DocumentAuthenticityForm';
 import { UserRole } from './types';
 import { api } from './services/api';
 import { auth } from './firebaseConfig';
 
-const App: React.FC = () => {
-  const [currentPage, setCurrentPage] = useState('landing');
-  const [currentUserRole, setCurrentUserRole] = useState<UserRole | null>(null);
-  const [userData, setUserData] = useState<any>(null);
-  const [isRestoring, setIsRestoring] = useState(true);
+const roleToPage = (role: UserRole): string => {
+  if (role === UserRole.ADMIN)        return 'admin-dashboard';
+  if (role === UserRole.INSTITUTION)  return 'institution-dashboard';
+  if (role === UserRole.ORGANISATION) return 'organisation-dashboard';
+  return 'user-dashboard'; // USER / GUEST / anything else
+};
 
+const App: React.FC = () => {
+  const [currentPage, setCurrentPage]       = useState('landing');
+  const [currentUserRole, setCurrentUserRole] = useState<UserRole | null>(null);
+  const [userData, setUserData]             = useState<any>(null);
+  const [isRestoring, setIsRestoring]       = useState(true);
+
+  // ── Restore session on load ─────────────────────────────────────────────
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged(async (user) => {
       if (user) {
-        const savedRole = localStorage.getItem('satyacert_role') as UserRole;
+        const savedRole = localStorage.getItem('satyacert_role') as UserRole | null;
         if (savedRole) {
           setCurrentUserRole(savedRole);
           setUserData({
-            uid: user.uid,
+            uid:   user.uid,
             email: user.email,
-            name: user.displayName || 'User',
-            id: localStorage.getItem('satyacert_inst_id') || user.uid,
+            name:  user.displayName || 'User',
+            id:    localStorage.getItem('satyacert_inst_id') || user.uid,
           });
-
-          if (currentPage === 'landing' || currentPage === 'login' || currentPage === 'admin-login') {
-            if (savedRole === UserRole.ADMIN) setCurrentPage('admin-dashboard');
-            else if (savedRole === UserRole.INSTITUTION) setCurrentPage('institution-dashboard');
-            else if (savedRole === UserRole.ORGANISATION) setCurrentPage('organisation-dashboard');
-            else setCurrentPage('user-dashboard');
-          }
+          // Only redirect if user is sitting on a public/auth page
+          setCurrentPage(prev => {
+            if (['landing', 'login', 'admin-login'].includes(prev)) {
+              return roleToPage(savedRole);
+            }
+            return prev; // stay where they are
+          });
         }
       } else {
         setCurrentUserRole(null);
@@ -51,24 +57,18 @@ const App: React.FC = () => {
       }
       setIsRestoring(false);
     });
-
     return () => unsubscribe();
-  }, [currentPage]);
+  }, []); // ← empty deps: run once only, no re-subscribe loop
 
+  // ── Called by CitizenLoginForm / StandardLoginForm after successful auth ─
   const handleLogin = (role: UserRole, data?: any) => {
     setCurrentUserRole(role);
     setUserData(data);
-
     localStorage.setItem('satyacert_role', role);
-
     if (data?.id && role === UserRole.INSTITUTION) {
       localStorage.setItem('satyacert_inst_id', data.id);
     }
-
-    if (role === UserRole.ADMIN) setCurrentPage('admin-dashboard');
-    else if (role === UserRole.INSTITUTION) setCurrentPage('institution-dashboard');
-    else if (role === UserRole.ORGANISATION) setCurrentPage('organisation-dashboard');
-    else setCurrentPage('landing');
+    setCurrentPage(roleToPage(role));
   };
 
   const handleLogout = async () => {
@@ -80,13 +80,15 @@ const App: React.FC = () => {
     setCurrentPage('landing');
   };
 
+  // ── Page renderer ───────────────────────────────────────────────────────
   const renderPage = () => {
-    if (isRestoring)
+    if (isRestoring) {
       return (
         <div className="min-h-screen flex items-center justify-center bg-slate-50 text-gov-blue">
-          Loading secure session...
+          <span className="text-lg font-medium">Loading secure session…</span>
         </div>
       );
+    }
 
     switch (currentPage) {
       case 'landing':
@@ -116,25 +118,28 @@ const App: React.FC = () => {
         return <AdminDashboard />;
 
       case 'institution-dashboard':
-        return <InstitutionDashboard institutionName={userData?.name} institutionId={userData?.id} />;
+        return (
+          <InstitutionDashboard
+            institutionName={userData?.name}
+            institutionId={userData?.id}
+          />
+        );
 
       case 'profile':
         return <ProfilePage />;
 
-      case "organisation-dashboard":
+      case 'organisation-dashboard':
         return <OrganisationDashboard organisationId={userData?.id} />;
 
       case 'verification':
         return (
           <div className="py-10 bg-slate-50 min-h-screen">
             <VerificationFlow
-              userId={userData?.uid}
               onComplete={() => setCurrentPage('user-dashboard')}
             />
           </div>
         );
 
-      /** NEW FORM PAGE */
       case 'auth-checker':
         return (
           <div className="py-10 bg-slate-100 min-h-screen flex justify-center">
@@ -148,7 +153,7 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50 font-sans">
+    <div className="w-full min-h-screen flex flex-col bg-slate-50 font-sans">
       <Navbar
         onNavigate={setCurrentPage}
         currentUser={userData?.name || (currentUserRole ? 'User' : null)}

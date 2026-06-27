@@ -1,148 +1,310 @@
-from fastapi import FastAPI, Query, UploadFile
+from fastapi import FastAPI, Query, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pathlib import Path
+from pymongo import MongoClient
+from bson import json_util
+from dotenv import load_dotenv
 import uvicorn
-import extract_json
-import compare_json
-import requests
+import httpx
 import json
 import os
 import shutil
-import json
-from pymongo import MongoClient
-from bson import json_util
-from fastapi import FastAPI, HTTPException
-import httpx
-from dotenv import load_dotenv
-import os
 
-app = FastAPI()
+import extract_json
+import compare_json
+
+# --- Setup ---
 load_dotenv()
+app = FastAPI(title="AcademiaAuthenticator API", version="2.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],      # tighten this in production
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+UPLOAD_DIR = Path("uploads")
+EXTRACTED_DIR = Path("extracted_json")
+
+
+def get_mongo_collection():
+    """Return the MongoDB collection. Raises HTTPException on failure."""
+    uri = os.getenv("ATLAS_DB_URL")
+    db_name = os.getenv("DB_NAME")
+    col_name = os.getenv("COLLECTION_NAME")
+    if not uri or not db_name or not col_name:
+        raise HTTPException(
+            status_code=500,
+            detail="MongoDB env vars not set (ATLAS_DB_URL, DB_NAME, COLLECTION_NAME)"
+        )
+    client = MongoClient(uri)
+    return client[db_name][col_name]
+
+
+def cleanup_temp_files():
+    """Remove the local uploads + extracted_json folders after verification."""
+    for folder in [UPLOAD_DIR, EXTRACTED_DIR]:
+        if folder.exists():
+            shutil.rmtree(folder)
+
+
+# ─────────────────────────────────────────────
+#  ENDPOINTS
+# ─────────────────────────────────────────────
+
 @app.get("/")
 def home():
-    return "FastAPI is working"
+    return {"status": "AcademiaAuthenticator API is running"}
+
+
+# ── 1. Upload & extract from a direct file upload ──────────────────────────
 
 @app.post("/uploadFile/")
-async def create_upload_file(file_upload: UploadFile):
-    UPLOAD_DIR = Path("uploads")
-    UPLOAD_DIR.mkdir(parents=True, exist_ok=True) 
+async def upload_file(file_upload: UploadFile):
+    """
+    Accept a PDF upload, save it, extract fields with OCR, return the JSON.
+    """
+    if not file_upload.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF files are accepted.")
+
+    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    save_path = UPLOAD_DIR / "uploaded.pdf"
 
     data = await file_upload.read()
-    save_to = UPLOAD_DIR / file_upload.filename
-    
-    # Save the file
-    with open(save_to, "wb") as f:
+    with open(save_path, "wb") as f:
         f.write(data)
-    
-    extract_json.process_pdfs()
+
+    try:
+        extracted = extract_json.process_single_pdf(str(save_path))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"PDF extraction failed: {str(e)}")
+
+    return {"status": "extracted", "data": extracted}
 
 
-@app.get("/verify/")
-async def verify_diff():
-    folder_path = "extracted_json"
-    diff = {}
-    file_path = os.path.join(folder_path, os.listdir(folder_path)[0])
-    with open(file_path, "r", encoding="utf-8") as f:
-        json1 = json.load(f)
-    ATLAS_CONNECTION_STRING = os.getenv("ATLAS_DB_URL")
-    DB_NAME = os.getenv("DB_NAME")
-    COLLECTION_NAME = os.getenv("COLLECTION_NAME")
-
-    def get_student_marksheet(roll_no, semester):
-        try:
-            client = MongoClient(ATLAS_CONNECTION_STRING)
-            db = client[DB_NAME]
-            collection = db[COLLECTION_NAME]
-            query = {
-                "marksheet.rollNo": roll_no,
-                "marksheet.academic_info.semester": semester
-            }
-            document = collection.find_one(query)
-            
-            if document:
-                return json.loads(json_util.dumps(document))
-            else:
-                return None
-        except Exception as e:
-            print(f"An error occurred: {e}")
-            return None
-        
-    target_roll = json1['marksheet']['rollNo']
-    target_sem = json1['marksheet']['academic_info']['semester']
-    json2 = get_student_marksheet(target_roll, target_sem)
-    if json2:
-        del json2["_id"]
-        del json2["__v"]
-    json.dumps(json1, indent=4)
-    json.dumps(json2, indent=4)
-    diff = compare_json.compare_json_files(json1, json2)
-    INPUT_FOLDER = "C:\\Desktop\\src\\uploads"
-    if os.path.exists(folder_path):
-        shutil.rmtree(folder_path)
-    if os.path.exists(INPUT_FOLDER):
-        shutil.rmtree(INPUT_FOLDER)
-    return {"file1": json1, "file2": json2, "diff": diff}
+# ── 2. Fetch PDF from Cloudinary URL, save, extract ────────────────────────
 
 @app.post("/save-pdf-to-server")
-async def save_pdf(pdf_url: str = Query(...)):
+async def save_pdf_from_url(pdf_url: str = Query(..., description="Cloudinary PDF URL")):
+    """
+    Fetch a PDF from a remote URL (e.g. Cloudinary), save locally, extract fields.
+    """
     try:
-        # 1. Asynchronously fetch the data
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=30) as client:
             response = await client.get(pdf_url)
-            response.raise_for_status() # Check for errors (404, 500)
-
-        # 2. Save the file to the local disk
-        # We use standard open here for simplicity, but aiofiles is better for heavy loads
-        UPLOAD_DIR = Path("uploads")
-        UPLOAD_DIR.mkdir(parents=True, exist_ok=True) 
-        save_path = f"{UPLOAD_DIR}/1.pdf"
-        
-        # Ensure directory exists
-        os.makedirs(os.path.dirname(save_path), exist_ok=True)
-
-        with open(save_path, "wb") as f:
-            f.write(response.content)
-
-        return {"message": "File saved successfully", "path": save_path}
-
+            response.raise_for_status()
     except httpx.HTTPStatusError as e:
-        raise HTTPException(status_code=400, detail=f"Error fetching PDF: {e}")
+        raise HTTPException(status_code=400, detail=f"Could not fetch PDF: {e}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-    
-@app.get('/uploadMongo')
-async def uploadDoc2Mongo():
-    ATLAS_CONNECTION_STRING = os.getenv("ATLAS_DB_URL")
-    DB_NAME = os.getenv("DB_NAME")
-    COLLECTION_NAME = os.getenv("COLLECTION_NAME")
+
+    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    save_path = UPLOAD_DIR / "1.pdf"
+    with open(save_path, "wb") as f:
+        f.write(response.content)
+
     try:
-        client = MongoClient(ATLAS_CONNECTION_STRING)
-        db = client[DB_NAME]
-        collection = db[COLLECTION_NAME]
-        UPLOAD_DIR = Path("uploads")
-        UPLOAD_DIR.mkdir(parents=True, exist_ok=True) 
-        extract_json.process_pdfs()
-        folder_path = "extracted_json"
-        file_path = os.path.join(folder_path, os.listdir(folder_path)[0])
-        with open(file_path, "r", encoding="utf-8") as f:
-            json1 = json.load(f)
-        json.dumps(json1, indent=4)
-        try:
-            collection.insert_one(json1)
-        except Exception as e:
-            print(e)
+        extracted = extract_json.process_single_pdf(str(save_path))
     except Exception as e:
-        print(e)
+        raise HTTPException(status_code=500, detail=f"PDF extraction failed: {str(e)}")
+
+    return {"status": "fetched_and_extracted", "path": str(save_path), "data": extracted}
+
+
+# ── 3. Verify: compare extracted JSON against MongoDB record ────────────────
+
+@app.post("/verify/")
+async def verify(file_upload: UploadFile):
+    """
+    Upload a certificate PDF → extract fields → fetch matching DB record →
+    compare and return a forgery verdict.
+    """
+    if not file_upload.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF files are accepted.")
+
+    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    save_path = UPLOAD_DIR / "verify_upload.pdf"
+
+    data = await file_upload.read()
+    with open(save_path, "wb") as f:
+        f.write(data)
+
+    # --- Extract ---
+    try:
+        json1 = extract_json.process_single_pdf(str(save_path))
+    except Exception as e:
+        cleanup_temp_files()
+        raise HTTPException(status_code=500, detail=f"Extraction failed: {str(e)}")
+
+    roll_no = json1.get("marksheet", {}).get("rollNo")
+    semester = json1.get("marksheet", {}).get("academic_info", {}).get("semester")
+
+    if not roll_no:
+        cleanup_temp_files()
+        raise HTTPException(
+            status_code=422,
+            detail="Could not extract Roll No from the uploaded PDF. "
+                   "Ensure the PDF is a supported marksheet format."
+        )
+
+    # --- Fetch from DB ---
+    try:
+        collection = get_mongo_collection()
+        document = collection.find_one({
+            "marksheet.rollNo": roll_no,
+            "marksheet.academic_info.semester": semester,
+        })
+    except HTTPException:
+        raise
+    except Exception as e:
+        cleanup_temp_files()
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+    if not document:
+        cleanup_temp_files()
+        raise HTTPException(
+            status_code=404,
+            detail=f"No record found in database for Roll No: {roll_no}, Semester: {semester}. "
+                   "The institution may not have uploaded this certificate yet."
+        )
+
+    # Convert MongoDB doc to plain dict (handles ObjectId etc.)
+    json2 = json.loads(json_util.dumps(document))
+    # Strip internal Mongo fields safely
+    json2.pop("_id", None)
+    json2.pop("__v", None)
+
+    # --- Compare ---
+    result = compare_json.compare_json_files(json1, json2)
+
+    cleanup_temp_files()
+
+    return {
+        "uploaded_document": json1,
+        "database_record": json2,
+        "verification_result": result,
+    }
+
+
+# ── 4. Verify using an already-fetched Cloudinary PDF ──────────────────────
+
+@app.post("/verify-from-url/")
+async def verify_from_url(pdf_url: str = Query(..., description="Cloudinary PDF URL")):
+    """
+    Fetch a certificate PDF from a URL, extract, compare against DB, return verdict.
+    """
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            response = await client.get(pdf_url)
+            response.raise_for_status()
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(status_code=400, detail=f"Could not fetch PDF: {e}")
+
+    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    save_path = UPLOAD_DIR / "verify_url.pdf"
+    with open(save_path, "wb") as f:
+        f.write(response.content)
+
+    try:
+        json1 = extract_json.process_single_pdf(str(save_path))
+    except Exception as e:
+        cleanup_temp_files()
+        raise HTTPException(status_code=500, detail=f"Extraction failed: {str(e)}")
+
+    roll_no = json1.get("marksheet", {}).get("rollNo")
+    semester = json1.get("marksheet", {}).get("academic_info", {}).get("semester")
+
+    if not roll_no:
+        cleanup_temp_files()
+        raise HTTPException(status_code=422, detail="Could not extract Roll No from PDF.")
+
+    try:
+        collection = get_mongo_collection()
+        document = collection.find_one({
+            "marksheet.rollNo": roll_no,
+            "marksheet.academic_info.semester": semester,
+        })
+    except HTTPException:
+        raise
+    except Exception as e:
+        cleanup_temp_files()
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+    if not document:
+        cleanup_temp_files()
+        raise HTTPException(
+            status_code=404,
+            detail=f"No DB record found for Roll No: {roll_no}, Semester: {semester}."
+        )
+
+    json2 = json.loads(json_util.dumps(document))
+    json2.pop("_id", None)
+    json2.pop("__v", None)
+
+    result = compare_json.compare_json_files(json1, json2)
+    cleanup_temp_files()
+
+    return {
+        "uploaded_document": json1,
+        "database_record": json2,
+        "verification_result": result,
+    }
+
+
+# ── 5. Institution: upload a genuine certificate to MongoDB ────────────────
+
+@app.post("/uploadMongo")
+async def upload_to_mongo(file_upload: UploadFile):
+    """
+    Institution endpoint: upload an authentic certificate PDF → extract →
+    save to MongoDB as the ground-truth record.
+    """
+    if not file_upload.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF files are accepted.")
+
+    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    save_path = UPLOAD_DIR / "mongo_upload.pdf"
+
+    data = await file_upload.read()
+    with open(save_path, "wb") as f:
+        f.write(data)
+
+    try:
+        json_output = extract_json.process_single_pdf(str(save_path))
+    except Exception as e:
+        cleanup_temp_files()
+        raise HTTPException(status_code=500, detail=f"Extraction failed: {str(e)}")
+
+    roll_no = json_output.get("marksheet", {}).get("rollNo")
+    semester = json_output.get("marksheet", {}).get("academic_info", {}).get("semester")
+
+    try:
+        collection = get_mongo_collection()
+        # Upsert: replace existing record for same roll+semester if it exists
+        collection.replace_one(
+            {
+                "marksheet.rollNo": roll_no,
+                "marksheet.academic_info.semester": semester,
+            },
+            json_output,
+            upsert=True,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        cleanup_temp_files()
+        raise HTTPException(status_code=500, detail=f"MongoDB write failed: {str(e)}")
+
+    cleanup_temp_files()
+    return {
+        "status": "saved",
+        "roll_no": roll_no,
+        "semester": semester,
+        "data": json_output,
+    }
 
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

@@ -1,472 +1,461 @@
-// import React, { useState, useEffect } from 'react';
-// import { Upload, FileText, Check, AlertTriangle, X, Loader2, Send, Keyboard, CloudCog } from 'lucide-react';
-// import { VerificationStep } from '../types';
-// import { DocumentComparisonDisplay } from './DocumentComparisonDisplay';
-// import { api } from '../services/api';
-
-// type VerificationMode = 'UPLOAD' | 'MANUAL';
-
-// interface VerificationFlowProps {
-//   userId: string;
-//   onComplete: () => void;
-// }
-
-// let verificationResult = {"file1": {}, "file2": {}, "diff": {}};
-
-// export const VerificationFlow: React.FC<VerificationFlowProps> = ({ userId, onComplete }) => {
-//   const [step, setStep] = useState<VerificationStep>(VerificationStep.UPLOAD);
-//   const [mode, setMode] = useState<VerificationMode>('UPLOAD');
-  
-//   const [file, setFile] = useState<File | null>(null);
-//   const [manualData, setManualData] = useState({ certificateId: '', name: '', institutionId: '' });
-//   const [institutions, setInstitutions] = useState<any[]>([]);
-
-//   const [requestId, setRequestId] = useState<string | null>(null);
-
-//   useEffect(() => {
-//     const loadInsts = async () => {
-//       try {
-//         const data = await api.getAllInstitutions();
-//         setInstitutions(data.filter((i:any) => i.status === 'ACTIVE'));
-//       } catch (e) {}
-//     };
-//     loadInsts();
-//   }, []);
-
-//   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-//     if (e.target.files && e.target.files[0]) {
-//       setFile(e.target.files[0]);
-//       setStep(VerificationStep.PREVIEW);
-//     }
-//   };
-
-//   const handleSubmission = async () => {
-//     setStep(VerificationStep.PROCESSING);
-//     const formData = new FormData();
-//     formData.append('file_upload', file!);
-//     try {
-//       const endpoint = "http://127.0.0.1:8000/uploadFile/";
-//       const response = await fetch(endpoint, {
-//         method: "POST",
-//         body: formData
-//       });
-//       if (response.ok) {
-//         const verify = "http://127.0.0.1:8000/verify/";
-//         const res = await fetch(verify, {
-//           method: "GET"
-//         })
-//         if (res.ok) {
-//           const result = await res.json();
-//           console.log(result);
-//           verificationResult = {...result};
-//           console.log(verificationResult);
-//         } else {
-//           console.log("Did not get the response")
-//         }
-//       } else {
-//         console.error("Failed to upload file.");
-//       }
-//     } catch (error) {
-//         console.error(error);
-//     }
-//     try {
-//       let res;
-//       if (mode === 'UPLOAD' && file) {
-//         res = await api.submitVerificationRequest(file, userId);
-//       } else {
-//         res = await api.submitManualRequest(manualData, userId);
-//       }
-      
-//       setRequestId(res.requestId);
-//       setStep(VerificationStep.HANDOVER);
-//     } catch (e) {
-//       alert("Submission Failed");
-//       setStep(VerificationStep.UPLOAD);
-//     }
-//   };
-
-//   const resetFlow = () => {
-//     setFile(null);
-//     setManualData({ certificateId: '', name: '', institutionId: '' });
-//     setStep(VerificationStep.UPLOAD);
-//     setRequestId(null);
-//   };
-
-//   return (
-//     <div className="max-w-4xl mx-auto p-6">
-      
-//       {/* Progress Stepper */}
-//       <div className="mb-8">
-//         <div className="flex items-center justify-between relative">
-//           <div className="absolute left-0 top-1/2 transform -translate-y-1/2 w-full h-1 bg-gray-200 -z-10"></div>
-//           {['Input', 'Preview', 'Submitting', 'Handover'].map((label, index) => {
-//             const isActive = index <= step;
-//             return (
-//               <div key={label} className="flex flex-col items-center bg-slate-50 px-2">
-//                 <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm transition-colors ${isActive ? 'bg-gov-blue text-white' : 'bg-gray-300 text-gray-600'}`}>
-//                   {index + 1}
-//                 </div>
-//                 <span className={`text-xs mt-1 font-medium ${isActive ? 'text-gov-blue' : 'text-gray-500'}`}>{label}</span>
-//               </div>
-//             );
-//           })}
-//         </div>
-//       </div>
-
-//       {/* Step 1: Input */}
-//       {step === VerificationStep.UPLOAD && (
-//         <div className="bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden">
-//           <div className="flex border-b border-gray-200">
-//              <button onClick={() => setMode('UPLOAD')} className={`flex-1 py-4 text-sm font-bold flex items-center justify-center gap-2 ${mode === 'UPLOAD' ? 'bg-blue-50 text-gov-blue border-b-2 border-gov-blue' : 'text-gray-500 hover:bg-gray-50'}`}>
-//                 <Upload size={18} /> Upload Document
-//              </button>
-//              <button onClick={() => setMode('MANUAL')} className={`flex-1 py-4 text-sm font-bold flex items-center justify-center gap-2 ${mode === 'MANUAL' ? 'bg-blue-50 text-gov-blue border-b-2 border-gov-blue' : 'text-gray-500 hover:bg-gray-50'}`}>
-//                 <Keyboard size={18} /> Enter Details Manually
-//              </button>
-//           </div>
-
-//           <div className="p-10">
-//             {mode === 'UPLOAD' ? (
-//               <div className="text-center">
-//                 <div className="w-20 h-20 bg-blue-50 text-gov-blue rounded-full mx-auto flex items-center justify-center mb-6"><Upload size={40} /></div>
-//                 <h2 className="text-2xl font-bold text-gray-800 mb-2">Upload Certificate</h2>
-//                 <p className="text-gray-500 mb-8 max-w-md mx-auto">Supported formats: PDF, JPG, PNG. Max size: 5MB.</p>
-//                 <div className="flex justify-center">
-//                   <label className="cursor-pointer bg-gov-blue hover:bg-blue-800 text-white font-semibold py-3 px-8 rounded shadow transition-colors">
-//                     <span>Choose File</span>
-//                     <input type="file" className="hidden" accept=".pdf,.jpg,.jpeg,.png" onChange={handleFileChange} />
-//                   </label>
-//                 </div>
-//               </div>
-//             ) : (
-//               <form onSubmit={(e) => {e.preventDefault(); handleSubmission();}} className="max-w-lg mx-auto space-y-5">
-//                 <div><label className="block text-sm font-medium text-gray-700 mb-1">Certificate ID</label><input required className="w-full border p-3 rounded" value={manualData.certificateId} onChange={e => setManualData({...manualData, certificateId: e.target.value})} /></div>
-//                 <div><label className="block text-sm font-medium text-gray-700 mb-1">Candidate Name</label><input required className="w-full border p-3 rounded" value={manualData.name} onChange={e => setManualData({...manualData, name: e.target.value})} /></div>
-//                 <div>
-//                    <label className="block text-sm font-medium text-gray-700 mb-1">Institution</label>
-//                    <select required className="w-full border p-3 rounded" value={manualData.institutionId} onChange={e => setManualData({...manualData, institutionId: e.target.value})}>
-//                      <option value="">Select Institution</option>
-//                      {institutions.map(inst => <option key={inst.id} value={inst.id}>{inst.name}</option>)}
-//                    </select>
-//                 </div>
-//                 <button type="submit" className="w-full bg-gov-blue hover:bg-blue-800 text-white font-bold py-3 rounded shadow mt-4">Submit Verification Request</button>
-//               </form>
-//             )}
-//           </div>
-//         </div>
-//       )}
-
-//       {/* Step 2: Preview (Upload only) */}
-//       {step === VerificationStep.PREVIEW && file && (
-//         <div className="bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden text-center p-8">
-//           <h3 className="font-bold text-gray-700 mb-4">Confirm Submission</h3>
-//           <div className="bg-gray-100 p-4 rounded mb-6 inline-block">{file.name}</div>
-//           <p className="text-sm text-gray-500 mb-6">This document will be sent to the backend for AI analysis.</p>
-//           <div className="flex justify-center gap-4">
-//             <button onClick={resetFlow} className="text-gray-500">Cancel</button>
-//             <button onClick={handleSubmission} className="bg-gov-green hover:bg-green-700 text-white font-bold py-2 px-6 rounded shadow flex items-center gap-2">
-//               <Send size={18} /> Submit for Analysis
-//             </button>
-//           </div>
-//         </div>
-//       )}
-
-//       {/* Step 3: Submitting */}
-//       {step === VerificationStep.PROCESSING && (
-//         <div className="bg-white rounded-lg shadow-md border border-gray-200 p-12 text-center">
-//           <Loader2 size={60} className="text-gov-blue animate-spin mx-auto mb-4" />
-//           <h2 className="text-xl font-bold text-gray-800">Sending to Secure Cloud...</h2>
-//         </div>
-//       )}
-
-//       {/* Step 4: Handover Result */}
-//       {step === VerificationStep.HANDOVER && 
-//         <DocumentComparisonDisplay
-//         file1={verificationResult.file1}
-//         file2={verificationResult.file2}
-//         diff={verificationResult.diff}
-//         onComplete={onComplete}
-//         resetFlow={resetFlow}
-//       />
-//     }
-//       {/* {step === VerificationStep.HANDOVER && (
-//         <div className="bg-white rounded-lg shadow-lg border-t-8 border-gov-green p-8 text-center">
-//           <div className="w-20 h-20 bg-green-100 text-gov-green rounded-full mx-auto flex items-center justify-center mb-6"><Check size={40} /></div>
-//           <h2 className="text-3xl font-bold text-gov-green mb-2">Request Submitted</h2>
-//           <p className="text-gray-600 mb-8">Your document has been successfully handed over to the backend verification engine.</p>
-//           <div className="bg-gray-50 p-4 rounded border border-gray-200 inline-block mb-6">
-//             <p className="text-xs text-gray-500 uppercase font-bold">Request ID</p>
-//             <p className="text-xl font-mono font-bold text-gray-800">{requestId}</p>
-//           </div>
-//           <p className="text-sm text-gray-500 mb-8">You can track the status of this request in your dashboard.</p>
-//           <div className="flex justify-center gap-4">
-//              <button onClick={resetFlow} className="px-6 py-2 border border-gray-300 rounded text-gray-700">Submit Another</button>
-//              <button onClick={onComplete} className="px-6 py-2 bg-gov-blue text-white rounded hover:bg-blue-800 font-bold">Go to Dashboard</button>
-//           </div>
-//         </div>
-//       )} */}
-//     </div>
-//   );
-// };
-
-// VerificationFlow.tsx
-
 import React, { useState, useEffect } from 'react';
-import { Upload, AlertTriangle, Loader2, Send, Keyboard } from 'lucide-react';
-// Assuming types.ts defines VerificationStep, UserRole, etc.
-// NOTE: I'm defining the interface here to make this component self-contained.
-// In your real project, these should come from '../types'.
+import {
+  Upload, AlertTriangle, Loader2, Send, Keyboard,
+  CheckCircle, XCircle, AlertCircle,
+} from 'lucide-react';
 
-// --- Local Type Definitions (for compilation) ---
+// ─── Types ────────────────────────────────────────────────────────────────────
 enum VerificationStep {
-    UPLOAD = 0,
-    PREVIEW = 1,
-    PROCESSING = 2,
-    HANDOVER = 3,
+  UPLOAD     = 0,
+  PREVIEW    = 1,
+  PROCESSING = 2,
+  RESULT     = 3,
 }
+
 type VerificationMode = 'UPLOAD' | 'MANUAL';
-interface ComparisonResult {
-    file1: any;
-    file2: any;
-    diff: any; // Now a PARSED JSON object
+
+interface FieldMismatch {
+  field: string;
+  uploaded_value: unknown;
+  database_value: unknown;
 }
-// --------------------------------------------------
 
-import { DocumentComparisonDisplay } from './DocumentComparisonDisplay';
-import { api } from '../services/api'; // Assuming your API services exist
+interface Verdict {
+  is_authentic: boolean;
+  risk_level: 'NONE' | 'LOW' | 'MEDIUM' | 'HIGH';
+  summary: string;
+  total_mismatches: number;
+  critical_mismatches: FieldMismatch[];
+  non_critical_mismatches: FieldMismatch[];
+}
 
-interface VerificationFlowProps {
-  userId: string;
+interface Marksheet {
+  student_info?:      { roll_no?: string; name?: string };
+  academic_info?:     { course?: string; semester?: string; sgpa?: number; cgpa?: number; result_status?: string };
+  document_metadata?: { university_name?: string };
+}
+
+interface VerificationApiResponse {
+  uploaded_document:   { marksheet: Marksheet };
+  database_record:     { marksheet: Marksheet };
+  verification_result: { verdict: Verdict; diff: unknown };
+}
+
+interface Institution {
+  id: string;
+  name: string;
+  status: string;
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Works with Vite (VITE_API_URL) or plain CRA / any setup (fallback to localhost)
+const API_BASE: string = (() => {
+  try {
+    return (import.meta as { env?: Record<string, string> }).env?.['VITE_API_URL'] ?? 'http://127.0.0.1:8000';
+  } catch {
+    return 'http://127.0.0.1:8000';
+  }
+})();
+
+// ─── Sub-components ───────────────────────────────────────────────────────────
+
+interface MismatchTableProps {
+  rows:    FieldMismatch[];
+  variant: 'critical' | 'minor';
+}
+
+const MismatchTable: React.FC<MismatchTableProps> = ({ rows, variant }) => {
+  const isCritical = variant === 'critical';
+  const headerBg   = isCritical ? 'bg-red-50 border-red-200'    : 'bg-amber-50 border-amber-200';
+  const wrapBorder  = isCritical ? 'border-red-200'              : 'border-amber-200';
+  const headerText  = isCritical ? 'text-red-700'                : 'text-amber-700';
+  const valueText   = isCritical ? 'text-red-600'                : 'text-amber-700';
+  const title       = isCritical ? 'Critical mismatches'         : 'Minor mismatches';
+
+  const fmtField = (f: string) =>
+    f.replace(/^marksheet\./, '').replace(/\./g, ' › ').replace(/_/g, ' ');
+
+  return (
+    <div className={`bg-white rounded-xl border overflow-hidden ${wrapBorder}`}>
+      <div className={`px-5 py-3 border-b ${headerBg}`}>
+        <h3 className={`font-bold text-sm ${headerText}`}>
+          {title} ({rows.length})
+        </h3>
+      </div>
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="bg-gray-50 text-gray-500 text-xs uppercase">
+            <th className="text-left px-5 py-2">Field</th>
+            <th className="text-left px-5 py-2">Uploaded</th>
+            <th className="text-left px-5 py-2">Database</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((m, i) => (
+            <tr key={i} className="border-t border-gray-100">
+              <td className="px-5 py-3 font-medium text-gray-700">{fmtField(m.field)}</td>
+              <td className={`px-5 py-3 font-mono ${valueText}`}>{String(m.uploaded_value ?? '—')}</td>
+              <td className="px-5 py-3 font-mono text-green-700">{String(m.database_value ?? '—')}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface ResultPanelProps {
+  data:      VerificationApiResponse;
+  onReset:   () => void;
   onComplete: () => void;
 }
 
-export const VerificationFlow: React.FC<VerificationFlowProps> = ({ userId, onComplete }) => {
-  const [step, setStep] = useState<VerificationStep>(VerificationStep.UPLOAD);
-  const [mode, setMode] = useState<VerificationMode>('UPLOAD');
-  
-  const [file, setFile] = useState<File | null>(null);
-  const [manualData, setManualData] = useState({ certificateId: '', name: '', institutionId: '' });
-  const [institutions, setInstitutions] = useState<any[]>([]);
+const ResultPanel: React.FC<ResultPanelProps> = ({ data, onReset, onComplete }) => {
+  const verdict  = data.verification_result.verdict;
+  const uploaded = data.uploaded_document.marksheet;
 
-  const [requestId, setRequestId] = useState<string | null>(null);
-  
-  // FIX 1: Use useState for the comparison result instead of a global let variable
-  const [comparisonResult, setComparisonResult] = useState<ComparisonResult | null>(null);
+  const riskBg = (level: Verdict['risk_level']): string => {
+    if (level === 'NONE' || level === 'LOW') return 'text-green-700 bg-green-50 border-green-300';
+    if (level === 'MEDIUM')                  return 'text-amber-700 bg-amber-50 border-amber-300';
+    return 'text-red-700 bg-red-50 border-red-300';
+  };
+
+  const RiskIcon: React.FC = () => {
+    if (verdict.risk_level === 'NONE' || verdict.risk_level === 'LOW')
+      return <CheckCircle className="w-6 h-6 text-green-600 flex-shrink-0" />;
+    if (verdict.risk_level === 'MEDIUM')
+      return <AlertCircle className="w-6 h-6 text-amber-600 flex-shrink-0" />;
+    return <XCircle className="w-6 h-6 text-red-600 flex-shrink-0" />;
+  };
+
+  const infoRows: [string, string | number | undefined][] = [
+    ['Roll No',    uploaded.student_info?.roll_no],
+    ['Name',       uploaded.student_info?.name],
+    ['Course',     uploaded.academic_info?.course],
+    ['Semester',   uploaded.academic_info?.semester],
+    ['SGPA',       uploaded.academic_info?.sgpa],
+    ['CGPA',       uploaded.academic_info?.cgpa],
+    ['Result',     uploaded.academic_info?.result_status],
+    ['University', uploaded.document_metadata?.university_name],
+  ];
+
+  return (
+    <div className="space-y-4">
+      {/* Verdict banner */}
+      <div className={`rounded-xl border-2 p-6 ${riskBg(verdict.risk_level)}`}>
+        <div className="flex items-center gap-3 mb-2">
+          <RiskIcon />
+          <span className="font-bold text-lg">
+            {verdict.is_authentic ? 'Certificate authentic' : 'Potential forgery detected'}
+          </span>
+          <span className={`ml-auto text-xs font-bold px-2 py-1 rounded-full border ${riskBg(verdict.risk_level)}`}>
+            {verdict.risk_level} RISK
+          </span>
+        </div>
+        <p className="text-sm">{verdict.summary}</p>
+      </div>
+
+      {/* Critical mismatches */}
+      {verdict.critical_mismatches.length > 0 && (
+        <MismatchTable rows={verdict.critical_mismatches} variant="critical" />
+      )}
+
+      {/* Minor mismatches */}
+      {verdict.non_critical_mismatches.length > 0 && (
+        <MismatchTable rows={verdict.non_critical_mismatches} variant="minor" />
+      )}
+
+      {/* Extracted info grid */}
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div className="bg-gray-50 px-5 py-3 border-b border-gray-200">
+          <h3 className="font-bold text-gray-700 text-sm">Extracted details</h3>
+        </div>
+        <div className="grid grid-cols-2 gap-px bg-gray-100">
+          {infoRows.map(([label, value]) => (
+            <div key={label} className="bg-white px-5 py-3">
+              <p className="text-xs text-gray-400 uppercase font-semibold mb-0.5">{label}</p>
+              <p className="text-sm font-medium text-gray-800">{String(value ?? '—')}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Actions */}
+      <div className="flex justify-end gap-3 pt-2">
+        <button
+          onClick={onReset}
+          className="px-6 py-2 border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 text-sm font-medium"
+        >
+          Verify another
+        </button>
+        <button
+          onClick={onComplete}
+          className="px-6 py-2 bg-blue-700 hover:bg-blue-800 text-white rounded-lg text-sm font-bold shadow"
+        >
+          Go to dashboard
+        </button>
+      </div>
+    </div>
+  );
+};
+
+// ─── Main component ───────────────────────────────────────────────────────────
+
+interface VerificationFlowProps {
+  onComplete: () => void;
+}
+
+export const VerificationFlow: React.FC<VerificationFlowProps> = ({ onComplete }) => {
+  const [step, setStep]     = useState<VerificationStep>(VerificationStep.UPLOAD);
+  const [mode, setMode]     = useState<VerificationMode>('UPLOAD');
+  const [file, setFile]     = useState<File | null>(null);
+  const [error, setError]   = useState<string | null>(null);
+  const [result, setResult] = useState<VerificationApiResponse | null>(null);
+  const [institutions, setInstitutions] = useState<Institution[]>([]);
+  const [manualData, setManualData] = useState({
+    certificateId: '',
+    name: '',
+    institutionId: '',
+  });
 
   useEffect(() => {
-    const loadInsts = async () => {
+    const load = async () => {
       try {
-        const data = await api.getAllInstitutions();
-        setInstitutions(data.filter((i:any) => i.status === 'ACTIVE'));
-      } catch (e) {
-        console.error("Failed to load institutions:", e);
+        const res = await fetch(`${API_BASE}/institutions`);
+        if (res.ok) {
+          const data = (await res.json()) as Institution[];
+          setInstitutions(data.filter(i => i.status === 'ACTIVE'));
+        }
+      } catch {
+        // non-fatal — manual dropdown will be empty
       }
     };
-    loadInsts();
+    load();
   }, []);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setFile(e.target.files[0]);
+    const picked = e.target.files?.[0];
+    if (picked) {
+      setFile(picked);
+      setError(null);
       setStep(VerificationStep.PREVIEW);
     }
   };
 
   const handleSubmission = async () => {
-    setStep(VerificationStep.PROCESSING);
-    
-    // Safety check for file upload mode
     if (mode === 'UPLOAD' && !file) {
-      alert("Please select a file to upload.");
-      setStep(VerificationStep.UPLOAD);
+      setError('Please select a PDF file first.');
       return;
     }
+    setStep(VerificationStep.PROCESSING);
+    setError(null);
 
-    let localRequestId: string | null = null;
-    let comparisonData: ComparisonResult | null = null;
-    
     try {
-        if (mode === 'UPLOAD' && file) {
-            const formData = new FormData();
-            formData.append('file_upload', file);
-            
-            // --- Step 1: Upload File ---
-            const uploadEndpoint = "http://127.0.0.1:8000/uploadFile/";
-            const uploadResponse = await fetch(uploadEndpoint, {
-                method: "POST",
-                body: formData
-            });
+      let response: Response;
 
-            if (uploadResponse.ok) {
-                // --- Step 2: Get Verification/Comparison Result ---
-                const verifyEndpoint = "http://127.0.0.1:8000/verify/";
-                const verifyResponse = await fetch(verifyEndpoint, { method: "GET" });
-                
-                if (verifyResponse.ok) {
-                    const result = await verifyResponse.json();
-                    
-                    // FIX 2: Parse the diff JSON string
-                    let parsedDiff = {};
-                    try {
-                        parsedDiff = JSON.parse(result.diff);
-                    } catch (e) {
-                        console.error("Failed to parse diff JSON string:", result.diff, e);
-                    }
-                    
-                    comparisonData = {
-                        file1: result.file1,
-                        file2: result.file2,
-                        diff: parsedDiff
-                    };
+      if (mode === 'UPLOAD' && file) {
+        const formData = new FormData();
+        formData.append('file_upload', file);
+        response = await fetch(`${API_BASE}/verify/`, { method: 'POST', body: formData });
+      } else {
+        response = await fetch(`${API_BASE}/verify-manual/`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(manualData),
+        });
+      }
 
-                } else {
-                    throw new Error(`Verification API call failed with status: ${verifyResponse.status}`);
-                }
+      if (!response.ok) {
+        const errBody = await response.json().catch(() => ({})) as { detail?: string };
+        throw new Error(errBody.detail ?? `Server error ${response.status}`);
+      }
 
-                // Step 3: Submit tracking request
-                const trackingRes = await api.submitVerificationRequest(file, userId);
-                localRequestId = trackingRes.requestId;
-                
-            } else {
-                throw new Error(`File upload failed with status: ${uploadResponse.status}`);
-            }
-        } else {
-            // Manual submission logic
-            const trackingRes = await api.submitManualRequest(manualData, userId);
-            localRequestId = trackingRes.requestId;
-            
-            // NOTE: For manual mode, you'd typically fetch comparison data after the request 
-            // is processed, or you'd just skip the comparison display. 
-            // For now, we set a temporary comparisonData (assuming no file1/file2 match) 
-            // to show the UI if needed.
-            comparisonData = { file1: {}, file2: {}, diff: {} }; 
-        }
-        
-        // Final state update
-        setComparisonResult(comparisonData);
-        setRequestId(localRequestId);
-        setStep(VerificationStep.HANDOVER);
+      const data = (await response.json()) as VerificationApiResponse;
+      setResult(data);
+      setStep(VerificationStep.RESULT);
 
-    } catch (error) {
-        console.error("Submission or Verification Flow Failed:", error);
-        alert(`Submission Failed: ${error instanceof Error ? error.message : 'An unknown error occurred.'}`);
-        setStep(VerificationStep.UPLOAD);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unknown error occurred.');
+      setStep(VerificationStep.UPLOAD);
     }
   };
 
   const resetFlow = () => {
     setFile(null);
+    setResult(null);
+    setError(null);
     setManualData({ certificateId: '', name: '', institutionId: '' });
     setStep(VerificationStep.UPLOAD);
-    setRequestId(null);
-    setComparisonResult(null); // Reset comparison result
   };
 
+  const STEPS = ['Upload', 'Preview', 'Analysing', 'Result'] as const;
+
   return (
-    <div className="max-w-4xl mx-auto p-6">
-      
-      {/* Progress Stepper (omitted for brevity) */}
+    <div className="max-w-3xl mx-auto p-6">
+
+      {/* Progress stepper */}
       <div className="mb-8">
         <div className="flex items-center justify-between relative">
-          <div className="absolute left-0 top-1/2 transform -translate-y-1/2 w-full h-1 bg-gray-200 -z-10"></div>
-          {['Input', 'Preview', 'Submitting', 'Handover'].map((label, index) => {
-            const isActive = index <= step;
+          <div className="absolute left-0 top-4 w-full h-1 bg-gray-200 -z-10" />
+          {STEPS.map((label, idx) => {
+            const active = idx <= step;
             return (
-              <div key={label} className="flex flex-col items-center bg-slate-50 px-2">
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm transition-colors ${isActive ? 'bg-gov-blue text-white' : 'bg-gray-300 text-gray-600'}`}>
-                  {index + 1}
+              <div key={label} className="flex flex-col items-center bg-white px-2 z-10">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm transition-colors ${
+                  active ? 'bg-blue-700 text-white' : 'bg-gray-200 text-gray-500'
+                }`}>
+                  {idx + 1}
                 </div>
-                <span className={`text-xs mt-1 font-medium ${isActive ? 'text-gov-blue' : 'text-gray-500'}`}>{label}</span>
+                <span className={`text-xs mt-1 font-medium ${active ? 'text-blue-700' : 'text-gray-400'}`}>
+                  {label}
+                </span>
               </div>
             );
           })}
         </div>
       </div>
 
-      {/* Step 1: Input (omitted for brevity) */}
-      {step === VerificationStep.UPLOAD && (
-        <div className="bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden">
-             <div className="flex border-b border-gray-200">
-                <button onClick={() => setMode('UPLOAD')} className={`flex-1 py-4 text-sm font-bold flex items-center justify-center gap-2 ${mode === 'UPLOAD' ? 'bg-blue-50 text-gov-blue border-b-2 border-gov-blue' : 'text-gray-500 hover:bg-gray-50'}`}>
-                    <Upload size={18} /> Upload Document
-                </button>
-                <button onClick={() => setMode('MANUAL')} className={`flex-1 py-4 text-sm font-bold flex items-center justify-center gap-2 ${mode === 'MANUAL' ? 'bg-blue-50 text-gov-blue border-b-2 border-gov-blue' : 'text-gray-500 hover:bg-gray-50'}`}>
-                    <Keyboard size={18} /> Enter Details Manually
-                </button>
-             </div>
-
-             <div className="p-10">
-                {mode === 'UPLOAD' ? (
-                   <div className="text-center">
-                     <div className="w-20 h-20 bg-blue-50 text-gov-blue rounded-full mx-auto flex items-center justify-center mb-6"><Upload size={40} /></div>
-                     <h2 className="text-2xl font-bold text-gray-800 mb-2">Upload Certificate</h2>
-                     <p className="text-gray-500 mb-8 max-w-md mx-auto">Supported formats: PDF, JPG, PNG. Max size: 5MB.</p>
-                     <div className="flex justify-center">
-                       <label className="cursor-pointer bg-gov-blue hover:bg-blue-800 text-white font-semibold py-3 px-8 rounded shadow transition-colors">
-                         <span>Choose File</span>
-                         <input type="file" className="hidden" accept=".pdf,.jpg,.jpeg,.png" onChange={handleFileChange} />
-                       </label>
-                     </div>
-                   </div>
-                ) : (
-                   <form onSubmit={(e) => {e.preventDefault(); handleSubmission();}} className="max-w-lg mx-auto space-y-5">
-                     <div><label className="block text-sm font-medium text-gray-700 mb-1">Certificate ID</label><input required className="w-full border p-3 rounded" value={manualData.certificateId} onChange={e => setManualData({...manualData, certificateId: e.target.value})} /></div>
-                     <div><label className="block text-sm font-medium text-gray-700 mb-1">Candidate Name</label><input required className="w-full border p-3 rounded" value={manualData.name} onChange={e => setManualData({...manualData, name: e.target.value})} /></div>
-                     <div>
-                         <label className="block text-sm font-medium text-gray-700 mb-1">Institution</label>
-                         <select required className="w-full border p-3 rounded" value={manualData.institutionId} onChange={e => setManualData({...manualData, institutionId: e.target.value})}>
-                            <option value="">Select Institution</option>
-                            {institutions.map(inst => <option key={inst.id} value={inst.id}>{inst.name}</option>)}
-                         </select>
-                     </div>
-                     <button type="submit" className="w-full bg-gov-blue hover:bg-blue-800 text-white font-bold py-3 rounded shadow mt-4">Submit Verification Request</button>
-                   </form>
-                )}
-             </div>
+      {/* Error banner */}
+      {error && (
+        <div className="mb-4 flex items-start gap-3 bg-red-50 border border-red-200 text-red-700 rounded-lg p-4">
+          <AlertTriangle className="w-5 h-5 mt-0.5 flex-shrink-0" />
+          <div>
+            <p className="font-semibold">Verification failed</p>
+            <p className="text-sm mt-1">{error}</p>
+          </div>
         </div>
       )}
 
-      {/* Step 2: Preview (omitted for brevity) */}
-      {step === VerificationStep.PREVIEW && file && (
-         <div className="bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden text-center p-8">
-            <h3 className="font-bold text-gray-700 mb-4">Confirm Submission</h3>
-            <div className="bg-gray-100 p-4 rounded mb-6 inline-block">{file.name}</div>
-            <p className="text-sm text-gray-500 mb-6">This document will be sent to the backend for AI analysis.</p>
-            <div className="flex justify-center gap-4">
-              <button onClick={resetFlow} className="text-gray-500">Cancel</button>
-              <button onClick={handleSubmission} className="bg-gov-green hover:bg-green-700 text-white font-bold py-2 px-6 rounded shadow flex items-center gap-2">
-                <Send size={18} /> Submit for Analysis
+      {/* Step 1 — Upload / Manual */}
+      {step === VerificationStep.UPLOAD && (
+        <div className="bg-white rounded-xl shadow border border-gray-200 overflow-hidden">
+          <div className="flex border-b border-gray-200">
+            {(['UPLOAD', 'MANUAL'] as VerificationMode[]).map(m => (
+              <button
+                key={m}
+                onClick={() => setMode(m)}
+                className={`flex-1 py-4 text-sm font-bold flex items-center justify-center gap-2 ${
+                  mode === m
+                    ? 'bg-blue-50 text-blue-700 border-b-2 border-blue-700'
+                    : 'text-gray-500 hover:bg-gray-50'
+                }`}
+              >
+                {m === 'UPLOAD'
+                  ? <><Upload size={16} /> Upload PDF</>
+                  : <><Keyboard size={16} /> Manual entry</>}
               </button>
-            </div>
-         </div>
+            ))}
+          </div>
+
+          <div className="p-10">
+            {mode === 'UPLOAD' ? (
+              <div className="text-center">
+                <div className="w-20 h-20 bg-blue-50 text-blue-700 rounded-full mx-auto flex items-center justify-center mb-6">
+                  <Upload size={36} />
+                </div>
+                <h2 className="text-2xl font-bold text-gray-800 mb-2">Upload certificate</h2>
+                <p className="text-gray-500 mb-8 max-w-sm mx-auto text-sm">
+                  PDF marksheets only. The file is analysed and immediately deleted from our servers.
+                </p>
+                <label className="cursor-pointer inline-block bg-blue-700 hover:bg-blue-800 text-white font-semibold py-3 px-8 rounded-lg shadow transition-colors">
+                  Choose PDF
+                  <input type="file" className="hidden" accept=".pdf" onChange={handleFileChange} />
+                </label>
+              </div>
+            ) : (
+              <form
+                onSubmit={e => { e.preventDefault(); void handleSubmission(); }}
+                className="max-w-md mx-auto space-y-5"
+              >
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Certificate ID</label>
+                  <input
+                    required
+                    className="w-full border border-gray-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={manualData.certificateId}
+                    onChange={e => setManualData({ ...manualData, certificateId: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Student name</label>
+                  <input
+                    required
+                    className="w-full border border-gray-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={manualData.name}
+                    onChange={e => setManualData({ ...manualData, name: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Institution</label>
+                  <select
+                    required
+                    className="w-full border border-gray-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={manualData.institutionId}
+                    onChange={e => setManualData({ ...manualData, institutionId: e.target.value })}
+                  >
+                    <option value="">Select institution…</option>
+                    {institutions.map(inst => (
+                      <option key={inst.id} value={inst.id}>{inst.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <button
+                  type="submit"
+                  className="w-full bg-blue-700 hover:bg-blue-800 text-white font-bold py-3 rounded-lg shadow"
+                >
+                  Submit for verification
+                </button>
+              </form>
+            )}
+          </div>
+        </div>
       )}
 
-      {/* Step 3: Submitting (omitted for brevity) */}
+      {/* Step 2 — Preview */}
+      {step === VerificationStep.PREVIEW && file && (
+        <div className="bg-white rounded-xl shadow border border-gray-200 p-10 text-center">
+          <div className="w-16 h-16 bg-blue-50 text-blue-700 rounded-full mx-auto flex items-center justify-center mb-5">
+            <Upload size={28} />
+          </div>
+          <h3 className="text-xl font-bold text-gray-800 mb-2">Ready to verify</h3>
+          <p className="text-gray-500 text-sm mb-4">Selected file:</p>
+          <div className="bg-gray-100 border border-gray-200 rounded-lg px-6 py-3 inline-block mb-2 font-mono text-sm text-gray-700">
+            {file.name}
+          </div>
+          <p className="text-xs text-gray-400 mb-8">{(file.size / 1024).toFixed(1)} KB · PDF</p>
+          <div className="flex justify-center gap-4">
+            <button
+              onClick={resetFlow}
+              className="px-6 py-2 border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => { void handleSubmission(); }}
+              className="bg-blue-700 hover:bg-blue-800 text-white font-bold py-2 px-8 rounded-lg shadow flex items-center gap-2"
+            >
+              <Send size={16} /> Verify now
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Step 3 — Processing */}
       {step === VerificationStep.PROCESSING && (
-         <div className="bg-white rounded-lg shadow-md border border-gray-200 p-12 text-center">
-            <Loader2 size={60} className="text-gov-blue animate-spin mx-auto mb-4" />
-            <h2 className="text-xl font-bold text-gray-800">Sending to Secure Cloud...</h2>
-         </div>
+        <div className="bg-white rounded-xl shadow border border-gray-200 p-16 text-center">
+          <Loader2 size={56} className="text-blue-700 animate-spin mx-auto mb-6" />
+          <h2 className="text-xl font-bold text-gray-800 mb-2">Analysing certificate…</h2>
+          <p className="text-sm text-gray-500">
+            Extracting fields, querying institutional records, and comparing.
+          </p>
+        </div>
       )}
 
-      {/* Step 4: Handover Result - Using the new Comparison Display */}
-      {step === VerificationStep.HANDOVER && comparisonResult && (
-        <DocumentComparisonDisplay
-          file1={comparisonResult.file1}
-          file2={comparisonResult.file2}
-          diff={comparisonResult.diff}
-          onComplete={onComplete}
-          resetFlow={resetFlow}
-        />
-      )}
-      
-      {/* Fallback for missing data */}
-      {step === VerificationStep.HANDOVER && !comparisonResult && (
-          <div className="bg-white rounded-lg shadow-md border border-gray-200 p-12 text-center text-red-600">
-             <AlertTriangle size={30} className="mx-auto mb-4" />
-             <p className="font-bold">Verification Failed.</p>
-             <p className="text-sm">Comparison results could not be retrieved. Please check the network log.</p>
-         </div>
+      {/* Step 4 — Result */}
+      {step === VerificationStep.RESULT && result && (
+        <ResultPanel data={result} onReset={resetFlow} onComplete={onComplete} />
       )}
     </div>
   );

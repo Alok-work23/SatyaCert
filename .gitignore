@@ -1,3 +1,5 @@
-node_modules/*
-.env
-vite-env.d.ts
+__pycache__/
+*.pyc
+extracted_json/
+uploads/
+backend/.env
