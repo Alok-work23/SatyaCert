@@ -11,6 +11,8 @@ backend/.env
 
 # Firebase service-account keys
 *service-account*.json
+# QR signing key
+*signing-key*.pem
 
 # Build output
 dist/

@@ -3,9 +3,10 @@ from datetime import datetime, timedelta, timezone
 import io
 import os
 
-from fastapi import Depends, FastAPI, UploadFile, HTTPException
+from fastapi import Depends, FastAPI, Query, UploadFile, HTTPException
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
 from pymongo import MongoClient, ASCENDING, DESCENDING
 from pymongo.collection import Collection
@@ -14,6 +15,7 @@ import uvicorn
 
 import extract_json
 import compare_json
+import signing
 from auth import CurrentUser, Uploader, get_current_user, init_firebase, require_admin, require_uploader
 
 # --- Setup ---
@@ -151,7 +153,8 @@ def outcome(verdict: dict | None) -> str:
     return "FORGED" if verdict["risk_level"] == "HIGH" else "SUSPICIOUS"
 
 
-async def log_verification(user: CurrentUser, source: str, claimed: dict, verdict: dict | None, file_name=None):
+async def log_verification(user: CurrentUser, source: str, claimed: dict, verdict: dict | None, file_name=None,
+                           result: str | None = None):
     """Best effort: a logging failure must never fail the verification itself."""
     roll_no, semester = roll_and_semester(claimed)
     entry = {
@@ -161,7 +164,7 @@ async def log_verification(user: CurrentUser, source: str, claimed: dict, verdic
         "roll_no": roll_no,
         "semester": semester,
         "student_name": claimed.get("marksheet", {}).get("student_info", {}).get("name"),
-        "result": outcome(verdict),
+        "result": result or outcome(verdict),
         "risk_level": verdict["risk_level"] if verdict else None,
         "created_at": datetime.now(timezone.utc),
     }
@@ -354,6 +357,82 @@ async def institution_records(uploader: Uploader = Depends(require_uploader)):
     }
     cursor = get_mongo_collection().find(query, projection).sort("_meta.uploaded_at", DESCENDING).limit(100)
     return {"records": await run_in_threadpool(list, cursor)}
+
+
+# ── 5b. Institution: signed QR code for one of its records ────────────────
+
+@app.get("/institution/records/qr")
+async def record_qr(
+    roll_no: str = Query(..., max_length=40),
+    semester: str = Query(..., max_length=10),
+    uploader: Uploader = Depends(require_uploader),
+):
+    """Issue the signed QR token for a record owned by the caller's institution."""
+    record = await run_in_threadpool(
+        get_mongo_collection().find_one,
+        {"marksheet.rollNo": roll_no, "marksheet.academic_info.semester": semester},
+        {"_id": 0, "__v": 0},
+    )
+    if not record:
+        raise HTTPException(status_code=404, detail="Record not found.")
+    owner = record.get("_meta", {}).get("institution_id")
+    if owner != uploader.institution_id and not uploader.user.is_admin:
+        raise HTTPException(status_code=403, detail="This record belongs to another institution.")
+    try:
+        return {"token": signing.issue_token(record)}
+    except signing.SigningUnavailable as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+
+# ── 5c. Public: verify a scanned QR code (no sign-in needed) ───────────────
+
+PUBLIC = CurrentUser(uid="public", email=None, is_admin=False)
+QR_OUTCOMES = {"VALID": "AUTHENTIC", "OUTDATED": "SUSPICIOUS", "REVOKED": "NOT_FOUND", "INVALID": "FORGED"}
+
+
+@app.get("/public/verify-qr")
+async def verify_qr(token: str = Query(..., max_length=2000)):
+    """
+    VALID    – signature checks out and the record is unchanged
+    OUTDATED – genuine QR, but the institution has since changed the record
+    REVOKED  – genuine QR, but the record no longer exists
+    INVALID  – not issued by SatyaCert, or tampered with
+    Only a correctly signed token ever reaches the database, so this endpoint
+    cannot be used to look up records.
+    """
+    try:
+        payload = signing.read_token(token)
+    except signing.SigningUnavailable as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except signing.InvalidToken as e:
+        await log_verification(PUBLIC, "qr", {}, None, result="FORGED")
+        return {"status": "INVALID", "reason": str(e)}
+
+    record = await find_record(payload.get("roll"), payload.get("sem"))
+    if not record:
+        status = "REVOKED"
+    elif signing.record_fingerprint(record) != payload.get("fp"):
+        status = "OUTDATED"
+    else:
+        status = "VALID"
+
+    claimed = {"marksheet": {"rollNo": payload.get("roll"), "student_info": {"name": payload.get("name")},
+                             "academic_info": {"semester": payload.get("sem")}}}
+    await log_verification(PUBLIC, "qr", claimed, None, result=QR_OUTCOMES[status])
+    return {
+        "status": status,
+        "certificate": {k: payload.get(k) for k in ("roll", "sem", "name", "cgpa", "sgpa", "result", "uni")},
+        "issued_at": datetime.fromtimestamp(payload["iat"], timezone.utc) if payload.get("iat") else None,
+    }
+
+
+@app.get("/public/signing-key", response_class=PlainTextResponse)
+def signing_key():
+    """The Ed25519 public key, for verifying QR codes offline."""
+    try:
+        return signing.public_key_pem()
+    except signing.SigningUnavailable as e:
+        raise HTTPException(status_code=503, detail=str(e))
 
 
 # ── 6. Verification history of the signed-in user ──────────────────────────

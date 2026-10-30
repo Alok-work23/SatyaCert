@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Database, Loader2 } from 'lucide-react';
+import { Database, Loader2, QrCode } from 'lucide-react';
 import { api, InstitutionRecord } from '../services/api';
 import { formatDate } from '../components/VerificationHistory';
+import { CertificateQrModal } from '../components/CertificateQrModal';
 import UploadDoc from './UploadDoc';
 
 interface Props {
@@ -12,6 +13,7 @@ export const InstitutionDashboard: React.FC<Props> = ({ institutionName }) => {
   const [records, setRecords] = useState<InstitutionRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [qrRecord, setQrRecord] = useState<InstitutionRecord | null>(null);
 
   const loadRecords = useCallback(() => {
     setError('');
@@ -58,7 +60,7 @@ export const InstitutionDashboard: React.FC<Props> = ({ institutionName }) => {
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
-                  {['Roll No', 'Semester', 'Student', 'CGPA', 'Uploaded'].map(h => (
+                  {['Roll No', 'Semester', 'Student', 'CGPA', 'Uploaded', 'QR'].map(h => (
                     <th key={h} className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{h}</th>
                   ))}
                 </tr>
@@ -71,16 +73,27 @@ export const InstitutionDashboard: React.FC<Props> = ({ institutionName }) => {
                     <td className="px-6 py-4 text-sm text-gray-700">{r.name || '—'}</td>
                     <td className="px-6 py-4 text-sm text-gray-700">{r.cgpa ?? '—'}</td>
                     <td className="px-6 py-4 text-sm text-gray-500 whitespace-nowrap">{formatDate(r.uploaded_at)}</td>
+                    <td className="px-6 py-4">
+                      <button
+                        onClick={() => setQrRecord(r)}
+                        className="text-gov-blue hover:text-blue-900 p-1 rounded"
+                        title="Signed QR code for this certificate"
+                      >
+                        <QrCode size={18} />
+                      </button>
+                    </td>
                   </tr>
                 ))}
                 {records.length === 0 && (
-                  <tr><td colSpan={5} className="px-6 py-8 text-center text-gray-500">No records uploaded yet.</td></tr>
+                  <tr><td colSpan={6} className="px-6 py-8 text-center text-gray-500">No records uploaded yet.</td></tr>
                 )}
               </tbody>
             </table>
           </div>
         )}
       </div>
+
+      {qrRecord && <CertificateQrModal record={qrRecord} onClose={() => setQrRecord(null)} />}
     </div>
   );
 };

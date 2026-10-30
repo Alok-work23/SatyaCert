@@ -9,3 +9,4 @@ backend/.venv
 .env
 backend/.env
 **/*service-account*.json
+**/*signing-key*.pem

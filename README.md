@@ -80,14 +80,27 @@ Critical fields: Student Name, Roll Number, CGPA, SGPA, Result Status
 | 🟠 MEDIUM | Suspicious mismatches |
 | 🔴 HIGH | Possible forged certificate |
 
+### 🔏 Signed QR Certificates
+Institutions can generate a QR code for every record they upload and print it on the certificate.
+The QR carries the key details signed with the platform's Ed25519 key. Scanning it opens a public page (no login) that reports:
+
+| Status | Meaning |
+|---|---|
+| ✅ VALID | Issued through SatyaCert and matches the current record |
+| 🟠 OUTDATED | Genuine, but the institution has since changed the record |
+| 🟠 REVOKED | Genuine, but the record has been removed |
+| ❌ INVALID | Not issued by SatyaCert, or tampered with |
+
+The public key is published at `/public/signing-key`, so QR codes can also be verified offline.
+
 ### 👥 Multi-Role Authentication
 
 | Role | Auth Method | Capabilities |
 |---|---|---|
 | 👤 Citizen | Google OAuth | Upload & verify certificates |
 | 🏫 Institution | Email/Password | Upload authentic records |
-| 🏢 Organisation | Email/Password | Verify candidate certificates |
-| ⚙️ Admin | Email/Password | Approve institutions, monitor forgery stats |
+| 🏢 Organisation | Email/Password | Verify candidate certificates (after admin approval) |
+| ⚙️ Admin | Email/Password | Approve institutions & organisations, monitor forgery stats |
 
 ---
 
@@ -167,7 +180,9 @@ SatyaCert/
 │   ├── auth.py              # Firebase token verification + role checks
 │   ├── extract_json.py      # PDF field extraction (pdfplumber, Tesseract OCR fallback)
 │   ├── compare_json.py      # Diff engine + forgery verdict
+│   ├── signing.py           # Ed25519-signed QR tokens
 │   ├── set_admin.py         # Grant/revoke the admin role
+│   ├── generate_signing_key.py  # Create the QR signing key
 │   ├── tests/               # pytest suite
 │   └── Dockerfile
 ├── src/
@@ -191,7 +206,7 @@ SatyaCert/
 
 ### Option A — Docker (everything in one command)
 
-After creating the three config files described below (`.env`, `backend/.env`, `backend/firebase-service-account.json`):
+After creating the config files described below (`.env`, `backend/.env`, `backend/firebase-service-account.json`, `backend/signing-key.pem`):
 
 ```bash
 docker compose up --build
@@ -276,6 +291,11 @@ npm run dev
    python set_admin.py admin@example.gov.in          # --revoke to remove
    ```
    The admin role is a Firebase custom claim, so it cannot be granted from the browser.
+3. **Create the QR signing key** (once — keep it secret and backed up; losing it invalidates every issued QR code):
+   ```bash
+   cd backend
+   python generate_signing_key.py        # writes signing-key.pem
+   ```
 
 ### Running Tests
 
@@ -289,7 +309,7 @@ python -m pytest tests
 
 ## 🔌 API Endpoints
 
-All endpoints except `/` require `Authorization: Bearer <Firebase ID token>`.
+All endpoints except `/` and `/public/*` require `Authorization: Bearer <Firebase ID token>`.
 
 | Method | Endpoint | Who | Description |
 |---|---|---|---|
@@ -298,6 +318,9 @@ All endpoints except `/` require `Authorization: Bearer <Firebase ID token>`.
 | `GET` | `/verifications/mine` | Signed-in user | The caller's verification history |
 | `POST` | `/uploadMongo` | Approved institution / admin | Upload authentic certificate to DB |
 | `GET` | `/institution/records` | Approved institution / admin | Records uploaded by the caller's institution |
+| `GET` | `/institution/records/qr` | Approved institution / admin | Signed QR token for one of its records |
+| `GET` | `/public/verify-qr` | Public | Check a scanned certificate QR code |
+| `GET` | `/public/signing-key` | Public | Ed25519 public key for offline QR verification |
 | `GET` | `/admin/stats` | Admin | Verification totals, monthly volume, recent activity |
 | `POST` | `/uploadFile/` | Signed-in user | Upload PDF and extract fields only |
 | `GET` | `/` | Public | Health check |
@@ -313,8 +336,6 @@ All endpoints except `/` require `Authorization: Bearer <Firebase ID token>`.
 ## 🚀 Future Enhancements
 
 - 🔗 Blockchain-backed certificate hashes
-- 📱 QR Code verification
-- ✍️ Digital signature support
 - 🤖 AI-powered OCR correction
 - 🏫 University ERP integration
 - 📧 Email verification reports

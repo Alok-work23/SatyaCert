@@ -28,7 +28,7 @@ export type VerificationOutcome = "AUTHENTIC" | "SUSPICIOUS" | "FORGED" | "NOT_F
 
 // One row of the backend's verification log
 export interface VerificationLogEntry {
-  source: "upload" | "manual";
+  source: "upload" | "manual" | "qr";
   file_name?: string | null;
   roll_no?: string | null;
   semester?: string | null;
@@ -51,6 +51,19 @@ export interface InstitutionRecord {
   name?: string;
   cgpa?: number;
   uploaded_at?: string;
+}
+
+export type QrStatus = "VALID" | "OUTDATED" | "REVOKED" | "INVALID";
+
+// Response of the public QR check (/public/verify-qr)
+export interface QrVerification {
+  status: QrStatus;
+  reason?: string;
+  certificate?: {
+    roll?: string; sem?: string; name?: string; cgpa?: number;
+    sgpa?: number; result?: string; uni?: string;
+  };
+  issued_at?: string | null;
 }
 
 let confirmationResult: firebaseAuth.ConfirmationResult | null = null;
@@ -266,4 +279,18 @@ export const api = {
     backendJson<{ records: InstitutionRecord[] }>("/institution/records").then(r => r.records),
 
   getAdminStats: () => backendJson<AdminStats>("/admin/stats"),
+
+  // Signed QR token for one of the institution's records; the QR encodes `${origin}/v/${token}`
+  getRecordQrToken: (rollNo: string, semester: string) =>
+    backendJson<{ token: string }>(
+      `/institution/records/qr?${new URLSearchParams({ roll_no: rollNo, semester })}`
+    ).then(r => r.token),
+
+  // Public: no sign-in needed, so anyone scanning a certificate can check it
+  verifyQr: async (token: string): Promise<QrVerification> => {
+    const res = await fetch(`${API_BASE}/public/verify-qr?${new URLSearchParams({ token })}`);
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(typeof body?.detail === "string" ? body.detail : `Server error ${res.status}`);
+    return body as QrVerification;
+  },
 };

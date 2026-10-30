@@ -36,7 +36,7 @@ export const VerificationTable: React.FC<VerificationTableProps> = ({ rows, empt
               <td className="px-6 py-4 text-sm font-mono text-gray-900">{row.roll_no ?? '—'}</td>
               <td className="px-6 py-4 text-sm text-gray-700">{row.semester ?? '—'}</td>
               <td className="px-6 py-4 text-sm text-gray-700">{row.student_name || '—'}</td>
-              <td className="px-6 py-4 text-sm text-gray-500">{row.source === 'manual' ? 'Manual entry' : row.file_name || 'PDF upload'}</td>
+              <td className="px-6 py-4 text-sm text-gray-500">{row.source === 'manual' ? 'Manual entry' : row.source === 'qr' ? 'QR scan' : row.file_name || 'PDF upload'}</td>
               <td className="px-6 py-4">
                 <span className={`px-2 py-1 text-xs font-bold rounded ${outcome.className}`}>{outcome.label}</span>
               </td>

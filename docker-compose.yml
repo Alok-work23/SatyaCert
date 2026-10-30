@@ -1,6 +1,6 @@
 # Run everything: docker compose up --build
 #   Frontend → http://localhost:8080   Backend → http://localhost:8000
-# Needs backend/.env, backend/firebase-service-account.json and the root .env (see README).
+# Needs backend/.env, backend/firebase-service-account.json, backend/signing-key.pem and the root .env (see README).
 services:
   backend:
     build:
@@ -9,9 +9,11 @@ services:
     env_file: backend/.env
     environment:
       FIREBASE_CREDENTIALS: /run/secrets/firebase_service_account
+      SIGNING_KEY_PATH: /run/secrets/signing_key
       CORS_ORIGINS: http://localhost:8080
     secrets:
       - firebase_service_account
+      - signing_key
     ports:
       - "8000:8000"
     restart: unless-stopped
@@ -38,3 +40,5 @@ services:
 secrets:
   firebase_service_account:
     file: backend/firebase-service-account.json
+  signing_key:
+    file: backend/signing-key.pem

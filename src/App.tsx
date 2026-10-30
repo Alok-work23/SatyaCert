@@ -22,6 +22,10 @@ const InstitutionRegistration  = named(() => import('./pages/InstitutionRegistra
 const OrganisationRegistration = named(() => import('./pages/OrganisationRegistration'), 'OrganisationRegistration');
 const OrganisationDashboard    = named(() => import('./pages/OrganisationDashboard'), 'OrganisationDashboard');
 const DocumentAuthenticityForm = named(() => import('./components/DocumentAuthenticityForm'), 'DocumentAuthenticityForm');
+const QrVerifyPage             = named(() => import('./pages/QrVerifyPage'), 'QrVerifyPage');
+
+// Scanned certificate QR codes open /v/<signed token>
+const QR_PREFIX = '/v/';
 
 // Page name ↔ URL. Components keep navigating by page name via onNavigate(page).
 const PAGE_PATHS: Record<string, string> = {
@@ -40,6 +44,7 @@ const PAGE_PATHS: Record<string, string> = {
 };
 
 const pathToPage = (path: string): string =>
+  path.startsWith(QR_PREFIX) ? 'qr-verify' :
   Object.keys(PAGE_PATHS).find(page => PAGE_PATHS[page] === path.replace(/\/+$/, '') || (page === 'landing' && path === '/')) ?? 'landing';
 
 const roleToPage = (role: UserRole): string => {
@@ -181,6 +186,9 @@ const App: React.FC = () => {
             <VerificationFlow onComplete={dashboard} />
           </div>
         );
+
+      case 'qr-verify':
+        return <QrVerifyPage token={decodeURIComponent(location.pathname.slice(QR_PREFIX.length))} />;
 
       case 'auth-checker':
         return (
