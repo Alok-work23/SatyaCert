@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   Upload, AlertTriangle, Loader2, Send, Keyboard,
   CheckCircle, XCircle, AlertCircle,
 } from 'lucide-react';
+import { backendFetch } from '../services/api';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 enum VerificationStep {
@@ -37,25 +38,11 @@ interface Marksheet {
 
 interface VerificationApiResponse {
   uploaded_document:   { marksheet: Marksheet };
-  database_record:     { marksheet: Marksheet };
   verification_result: { verdict: Verdict; diff: unknown };
 }
 
-interface Institution {
-  id: string;
-  name: string;
-  status: string;
-}
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Works with Vite (VITE_API_URL) or plain CRA / any setup (fallback to localhost)
-const API_BASE: string = (() => {
-  try {
-    return (import.meta as { env?: Record<string, string> }).env?.['VITE_API_URL'] ?? 'http://127.0.0.1:8000';
-  } catch {
-    return 'http://127.0.0.1:8000';
-  }
-})();
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
@@ -207,33 +194,16 @@ interface VerificationFlowProps {
   onComplete: () => void;
 }
 
+// Manual entry: the record is looked up by roll no + semester; name (and CGPA, if given) are checked
+const EMPTY_MANUAL = { roll_no: '', semester: '', name: '', cgpa: '' };
+
 export const VerificationFlow: React.FC<VerificationFlowProps> = ({ onComplete }) => {
   const [step, setStep]     = useState<VerificationStep>(VerificationStep.UPLOAD);
   const [mode, setMode]     = useState<VerificationMode>('UPLOAD');
   const [file, setFile]     = useState<File | null>(null);
   const [error, setError]   = useState<string | null>(null);
   const [result, setResult] = useState<VerificationApiResponse | null>(null);
-  const [institutions, setInstitutions] = useState<Institution[]>([]);
-  const [manualData, setManualData] = useState({
-    certificateId: '',
-    name: '',
-    institutionId: '',
-  });
-
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const res = await fetch(`${API_BASE}/institutions`);
-        if (res.ok) {
-          const data = (await res.json()) as Institution[];
-          setInstitutions(data.filter(i => i.status === 'ACTIVE'));
-        }
-      } catch {
-        // non-fatal — manual dropdown will be empty
-      }
-    };
-    load();
-  }, []);
+  const [manualData, setManualData] = useState(EMPTY_MANUAL);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const picked = e.target.files?.[0];
@@ -258,12 +228,15 @@ export const VerificationFlow: React.FC<VerificationFlowProps> = ({ onComplete }
       if (mode === 'UPLOAD' && file) {
         const formData = new FormData();
         formData.append('file_upload', file);
-        response = await fetch(`${API_BASE}/verify/`, { method: 'POST', body: formData });
+        response = await backendFetch('/verify/', { method: 'POST', body: formData });
       } else {
-        response = await fetch(`${API_BASE}/verify-manual/`, {
+        response = await backendFetch('/verify-manual/', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(manualData),
+          body: JSON.stringify({
+            ...manualData,
+            cgpa: manualData.cgpa.trim() ? Number(manualData.cgpa) : null,
+          }),
         });
       }
 
@@ -286,7 +259,7 @@ export const VerificationFlow: React.FC<VerificationFlowProps> = ({ onComplete }
     setFile(null);
     setResult(null);
     setError(null);
-    setManualData({ certificateId: '', name: '', institutionId: '' });
+    setManualData(EMPTY_MANUAL);
     setStep(VerificationStep.UPLOAD);
   };
 
@@ -369,14 +342,26 @@ export const VerificationFlow: React.FC<VerificationFlowProps> = ({ onComplete }
                 onSubmit={e => { e.preventDefault(); void handleSubmission(); }}
                 className="max-w-md mx-auto space-y-5"
               >
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Certificate ID</label>
-                  <input
-                    required
-                    className="w-full border border-gray-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    value={manualData.certificateId}
-                    onChange={e => setManualData({ ...manualData, certificateId: e.target.value })}
-                  />
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">University roll no</label>
+                    <input
+                      required
+                      className="w-full border border-gray-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      value={manualData.roll_no}
+                      onChange={e => setManualData({ ...manualData, roll_no: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Semester</label>
+                    <input
+                      required
+                      placeholder="e.g. IV or 4"
+                      className="w-full border border-gray-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      value={manualData.semester}
+                      onChange={e => setManualData({ ...manualData, semester: e.target.value })}
+                    />
+                  </div>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Student name</label>
@@ -388,19 +373,20 @@ export const VerificationFlow: React.FC<VerificationFlowProps> = ({ onComplete }
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Institution</label>
-                  <select
-                    required
+                  <label className="block text-sm font-medium text-gray-700 mb-1">CGPA <span className="text-gray-400">(optional)</span></label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    max="10"
                     className="w-full border border-gray-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    value={manualData.institutionId}
-                    onChange={e => setManualData({ ...manualData, institutionId: e.target.value })}
-                  >
-                    <option value="">Select institution…</option>
-                    {institutions.map(inst => (
-                      <option key={inst.id} value={inst.id}>{inst.name}</option>
-                    ))}
-                  </select>
+                    value={manualData.cgpa}
+                    onChange={e => setManualData({ ...manualData, cgpa: e.target.value })}
+                  />
                 </div>
+                <p className="text-xs text-gray-500">
+                  For privacy, the institution's record is never shown — you only learn whether these details match it.
+                </p>
                 <button
                   type="submit"
                   className="w-full bg-blue-700 hover:bg-blue-800 text-white font-bold py-3 rounded-lg shadow"

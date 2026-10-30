@@ -1,21 +1,46 @@
-import React, { useState, useEffect } from 'react';
+import React, { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Navbar } from './components/Navbar';
 import { Footer } from './components/Footer';
 import { LandingPage } from './pages/LandingPage';
-import { Auth } from './pages/Auth';
-import { AdminAuth } from './pages/AdminAuth';
-import { UserDashboard } from './pages/UserDashboard';
-import { AdminDashboard } from './pages/AdminDashboard';
-import { InstitutionDashboard } from './pages/InstitutionDashboard';
-import { VerificationFlow } from './pages/VerificationFlow';
-import { ProfilePage } from './pages/ProfilePage';
-import { InstitutionRegistration } from './pages/InstitutionRegistration';
-import { OrganisationRegistration } from './pages/OrganisationRegistration';
-import { OrganisationDashboard } from './pages/OrganisationDashboard';
-import { DocumentAuthenticityForm } from './components/DocumentAuthenticityForm';
 import { UserRole } from './types';
-import { api } from './services/api';
+import { api, Session } from './services/api';
 import { auth } from './firebaseConfig';
+
+// Pages are code-split so visitors only download the screens they open
+const named = <K extends string>(loader: () => Promise<Record<K, React.ComponentType<any>>>, name: K) =>
+  lazy(() => loader().then(m => ({ default: m[name] })));
+
+const Auth                     = named(() => import('./pages/Auth'), 'Auth');
+const AdminAuth                = named(() => import('./pages/AdminAuth'), 'AdminAuth');
+const UserDashboard            = named(() => import('./pages/UserDashboard'), 'UserDashboard');
+const AdminDashboard           = named(() => import('./pages/AdminDashboard'), 'AdminDashboard');
+const InstitutionDashboard     = named(() => import('./pages/InstitutionDashboard'), 'InstitutionDashboard');
+const VerificationFlow         = named(() => import('./pages/VerificationFlow'), 'VerificationFlow');
+const ProfilePage              = named(() => import('./pages/ProfilePage'), 'ProfilePage');
+const InstitutionRegistration  = named(() => import('./pages/InstitutionRegistration'), 'InstitutionRegistration');
+const OrganisationRegistration = named(() => import('./pages/OrganisationRegistration'), 'OrganisationRegistration');
+const OrganisationDashboard    = named(() => import('./pages/OrganisationDashboard'), 'OrganisationDashboard');
+const DocumentAuthenticityForm = named(() => import('./components/DocumentAuthenticityForm'), 'DocumentAuthenticityForm');
+
+// Page name ↔ URL. Components keep navigating by page name via onNavigate(page).
+const PAGE_PATHS: Record<string, string> = {
+  'landing':                '/',
+  'login':                  '/login',
+  'admin-login':            '/admin/login',
+  'register-institution':   '/register/institution',
+  'register-organisation':  '/register/organisation',
+  'user-dashboard':         '/dashboard',
+  'admin-dashboard':        '/admin',
+  'institution-dashboard':  '/institution',
+  'organisation-dashboard': '/organisation',
+  'profile':                '/profile',
+  'verification':           '/verify',
+  'auth-checker':           '/similarity-checker',
+};
+
+const pathToPage = (path: string): string =>
+  Object.keys(PAGE_PATHS).find(page => PAGE_PATHS[page] === path.replace(/\/+$/, '') || (page === 'landing' && path === '/')) ?? 'landing';
 
 const roleToPage = (role: UserRole): string => {
   if (role === UserRole.ADMIN)        return 'admin-dashboard';
@@ -24,119 +49,136 @@ const roleToPage = (role: UserRole): string => {
   return 'user-dashboard'; // USER / GUEST / anything else
 };
 
+// Pages that need a session, and which roles may see them (empty = any signed-in role).
+// This only shapes the UI — the backend and Firestore rules are what actually enforce access.
+const PAGE_ROLES: Record<string, UserRole[]> = {
+  'admin-dashboard':        [UserRole.ADMIN],
+  'institution-dashboard':  [UserRole.INSTITUTION],
+  'organisation-dashboard': [UserRole.ORGANISATION],
+  'user-dashboard':         [],
+  'verification':           [],
+  'profile':                [],
+};
+
+const canView = (page: string, role: UserRole | null): boolean => {
+  const allowed = PAGE_ROLES[page];
+  if (!allowed) return true;          // public page
+  if (!role) return false;
+  return allowed.length === 0 || allowed.includes(role);
+};
+
+const Loading: React.FC<{ text?: string }> = ({ text = 'Loading…' }) => (
+  <div className="min-h-screen flex items-center justify-center bg-slate-50 text-gov-blue">
+    <span className="text-lg font-medium">{text}</span>
+  </div>
+);
+
 const App: React.FC = () => {
-  const [currentPage, setCurrentPage]       = useState('landing');
+  const navigate = useNavigate();
+  const location = useLocation();
+  const currentPage = pathToPage(location.pathname);
+  const pageRef = useRef(currentPage);
+  pageRef.current = currentPage;
+
   const [currentUserRole, setCurrentUserRole] = useState<UserRole | null>(null);
-  const [userData, setUserData]             = useState<any>(null);
+  const [userData, setUserData]             = useState<Session | null>(null);
   const [isRestoring, setIsRestoring]       = useState(true);
+
+  const goTo = useCallback((page: string, replace = false) => {
+    navigate(PAGE_PATHS[page] ?? '/', { replace });
+    window.scrollTo(0, 0);
+  }, [navigate]);
 
   // ── Restore session on load ─────────────────────────────────────────────
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged(async (user) => {
+      let session: Session | null = null;
       if (user) {
-        const savedRole = localStorage.getItem('satyacert_role') as UserRole | null;
-        if (savedRole) {
-          setCurrentUserRole(savedRole);
-          setUserData({
-            uid:   user.uid,
-            email: user.email,
-            name:  user.displayName || 'User',
-            id:    localStorage.getItem('satyacert_inst_id') || user.uid,
-          });
-          // Only redirect if user is sitting on a public/auth page
-          setCurrentPage(prev => {
-            if (['landing', 'login', 'admin-login'].includes(prev)) {
-              return roleToPage(savedRole);
-            }
-            return prev; // stay where they are
-          });
+        try {
+          session = await api.getSession(user);
+        } catch {
+          session = null; // e.g. institution still pending approval
         }
-      } else {
-        setCurrentUserRole(null);
-        setUserData(null);
+      }
+      setCurrentUserRole(session?.role ?? null);
+      setUserData(session);
+
+      const page = pageRef.current;
+      if (!session) {
+        if (!canView(page, null)) goTo('landing', true);
+      } else if (['landing', 'login', 'admin-login'].includes(page) || !canView(page, session.role)) {
+        // Signed in on a public/auth page (or a page for another role): go to own dashboard
+        goTo(roleToPage(session.role), true);
       }
       setIsRestoring(false);
     });
     return () => unsubscribe();
-  }, []); // ← empty deps: run once only, no re-subscribe loop
+  }, [goTo]);
 
-  // ── Called by CitizenLoginForm / StandardLoginForm after successful auth ─
-  const handleLogin = (role: UserRole, data?: any) => {
+  // ── Called by CitizenLoginForm / StandardLoginForm / AdminAuth after successful auth ─
+  const handleLogin = (role: UserRole, data?: Session) => {
     setCurrentUserRole(role);
-    setUserData(data);
-    localStorage.setItem('satyacert_role', role);
-    if (data?.id && role === UserRole.INSTITUTION) {
-      localStorage.setItem('satyacert_inst_id', data.id);
-    }
-    setCurrentPage(roleToPage(role));
+    setUserData(data ?? null);
+    goTo(roleToPage(role));
   };
 
   const handleLogout = async () => {
     await api.logout();
-    localStorage.removeItem('satyacert_role');
-    localStorage.removeItem('satyacert_inst_id');
     setCurrentUserRole(null);
     setUserData(null);
-    setCurrentPage('landing');
+    goTo('landing');
   };
+
+  const dashboard = () => goTo(currentUserRole ? roleToPage(currentUserRole) : 'landing');
 
   // ── Page renderer ───────────────────────────────────────────────────────
   const renderPage = () => {
-    if (isRestoring) {
-      return (
-        <div className="min-h-screen flex items-center justify-center bg-slate-50 text-gov-blue">
-          <span className="text-lg font-medium">Loading secure session…</span>
-        </div>
-      );
+    if (isRestoring) return <Loading text="Loading secure session…" />;
+
+    if (!canView(currentPage, currentUserRole)) {
+      return <LandingPage onNavigate={goTo} />;
     }
 
     switch (currentPage) {
       case 'landing':
-        return <LandingPage onNavigate={setCurrentPage} />;
+        return <LandingPage onNavigate={goTo} />;
 
       case 'login':
-        return <Auth onLogin={handleLogin} onNavigate={setCurrentPage} />;
+        return <Auth onLogin={handleLogin} onNavigate={goTo} />;
 
       case 'admin-login':
-        return <AdminAuth onLogin={handleLogin} onNavigate={setCurrentPage} />;
+        return <AdminAuth onLogin={handleLogin} onNavigate={goTo} />;
 
       case 'register-institution':
-        return <InstitutionRegistration onNavigate={setCurrentPage} />;
+        return <InstitutionRegistration onNavigate={goTo} />;
 
       case 'register-organisation':
-        return <OrganisationRegistration onNavigate={setCurrentPage} />;
+        return <OrganisationRegistration onNavigate={goTo} />;
 
       case 'user-dashboard':
-        return (
-          <UserDashboard
-            onVerifyClick={() => setCurrentPage('verification')}
-            userId={userData?.uid}
-          />
-        );
+        return <UserDashboard onVerifyClick={() => goTo('verification')} />;
 
       case 'admin-dashboard':
         return <AdminDashboard />;
 
       case 'institution-dashboard':
-        return (
-          <InstitutionDashboard
-            institutionName={userData?.name}
-            institutionId={userData?.id}
-          />
-        );
+        return <InstitutionDashboard institutionName={userData?.name} />;
 
       case 'profile':
-        return <ProfilePage />;
+        return <ProfilePage session={userData} />;
 
       case 'organisation-dashboard':
-        return <OrganisationDashboard organisationId={userData?.id} />;
+        return (
+          <OrganisationDashboard
+            organisationName={userData?.name}
+            onVerifyClick={() => goTo('verification')}
+          />
+        );
 
       case 'verification':
         return (
           <div className="py-10 bg-slate-50 min-h-screen">
-            <VerificationFlow
-              onComplete={() => setCurrentPage('user-dashboard')}
-            />
+            <VerificationFlow onComplete={dashboard} />
           </div>
         );
 
@@ -148,19 +190,21 @@ const App: React.FC = () => {
         );
 
       default:
-        return <LandingPage onNavigate={setCurrentPage} />;
+        return <LandingPage onNavigate={goTo} />;
     }
   };
 
   return (
     <div className="w-full min-h-screen flex flex-col bg-slate-50 font-sans">
       <Navbar
-        onNavigate={setCurrentPage}
+        onNavigate={goTo}
         currentUser={userData?.name || (currentUserRole ? 'User' : null)}
         role={currentUserRole}
         onLogout={handleLogout}
       />
-      <main className="flex-grow">{renderPage()}</main>
+      <main className="flex-grow">
+        <Suspense fallback={<Loading />}>{renderPage()}</Suspense>
+      </main>
       <Footer />
     </div>
   );

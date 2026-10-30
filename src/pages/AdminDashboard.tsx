@@ -2,17 +2,25 @@ import React, { useEffect, useState } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts';
-import { MONTHLY_STATS } from '../constants';
-import { api } from '../services/api';
+import { api, AdminStats } from '../services/api';
 import { Institution } from '../types';
-import { Check, X, AlertTriangle, Edit2, Trash2 } from 'lucide-react';
+import { VerificationTable } from '../components/VerificationHistory';
+import { Check, X, AlertTriangle, Eye, Trash2 } from 'lucide-react';
+
+const monthLabel = (ym: string) =>
+  new Date(`${ym}-01T00:00:00`).toLocaleString(undefined, { month: 'short', year: '2-digit' });
 
 export const AdminDashboard: React.FC = () => {
   const [institutions, setInstitutions] = useState<Institution[]>([]);
   const [selectedInst, setSelectedInst] = useState<Institution | null>(null);
+  const [stats, setStats] = useState<AdminStats | null>(null);
+  const [statsError, setStatsError] = useState('');
 
   useEffect(() => {
     fetchInstitutions();
+    api.getAdminStats()
+      .then(setStats)
+      .catch(e => setStatsError(e instanceof Error ? e.message : 'Could not load statistics.'));
   }, []);
 
   const fetchInstitutions = async () => {
@@ -26,18 +34,22 @@ export const AdminDashboard: React.FC = () => {
     fetchInstitutions();
   };
 
-  const handleDelete = async (id: string) => {
-    await api.deleteInstitution(id);
+  const handleDelete = async (inst: Institution) => {
+    if (!window.confirm(`Permanently delete ${inst.name}? They will lose upload access.`)) return;
+    await api.deleteInstitution(inst.id);
     fetchInstitutions();
-  };
-
-  const handleEdit = async (id: string) => {
-    const inst = institutions.find(i => i.id === id);
-    if (inst) setSelectedInst(inst);
   };
 
   const pendingInstitutions = institutions.filter(i => i.status === 'PENDING');
   const approvedInstitutions = institutions.filter(i => i.status === 'ACTIVE');
+  const fmt = (n?: number) => (stats ? (n ?? 0).toLocaleString() : '—');
+
+  const statCards = [
+    { label: 'Total Verifications', value: fmt(stats?.total), border: 'border-gov-blue', text: '' },
+    { label: 'Forgeries Detected', value: fmt(stats?.by_result.FORGED), border: 'border-red-500', text: 'text-red-600' },
+    { label: 'Suspicious', value: fmt(stats?.by_result.SUSPICIOUS), border: 'border-amber-500', text: 'text-amber-600' },
+    { label: 'Pending Approvals', value: pendingInstitutions.length.toLocaleString(), border: 'border-gov-orange', text: 'text-orange-600' },
+  ];
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
@@ -45,17 +57,17 @@ export const AdminDashboard: React.FC = () => {
       <h1 className="text-2xl font-bold text-gray-900 font-serif mb-8"> Ministry of Education Jharkhand</h1>
 
       {/* STATS */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-        <div className="bg-white p-4 rounded shadow border-t-4 border-gov-blue">
-          <div className="text-gray-500 text-xs font-bold uppercase mb-1">Total Verifications</div>
-          <div className="text-2xl font-bold">14,205</div>
-        </div>
-
-        <div className="bg-white p-4 rounded shadow border-t-4 border-gov-orange">
-          <div className="text-gray-500 text-xs font-bold uppercase mb-1">Pending Approvals</div>
-          <div className="text-2xl font-bold text-orange-600">{pendingInstitutions.length}</div>
-        </div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        {statCards.map(card => (
+          <div key={card.label} className={`bg-white p-4 rounded shadow border-t-4 ${card.border}`}>
+            <div className="text-gray-500 text-xs font-bold uppercase mb-1">{card.label}</div>
+            <div className={`text-2xl font-bold ${card.text}`}>{card.value}</div>
+          </div>
+        ))}
       </div>
+      {statsError && (
+        <div className="bg-red-50 text-red-600 p-3 rounded text-sm border border-red-200 mb-8">{statsError}</div>
+      )}
 
       {/* FIXED 2-COLUMN LAYOUT */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -74,6 +86,7 @@ export const AdminDashboard: React.FC = () => {
                 <thead className="bg-gray-50">
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Institution</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">District</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Action</th>
                   </tr>
                 </thead>
@@ -83,26 +96,20 @@ export const AdminDashboard: React.FC = () => {
                     pendingInstitutions.map(inst => (
                       <tr key={inst.id}>
                         <td className="px-6 py-4 font-bold text-gray-900">{inst.name}</td>
-
-                        <td className="px-6 py-4 flex gap-2">
-                          {/* <button
+                        <td className="px-6 py-4 text-sm text-gray-600">{inst.district || '—'}</td>
+                        <td className="px-6 py-4">
+                          <button
                             onClick={() => setSelectedInst(inst)}
                             className="bg-blue-100 text-blue-700 px-3 py-1 rounded hover:bg-blue-200"
                           >
                             Review
-                          </button> */}
-                          <button
-  onClick={() => window.open("http://10.195.115.216:9001", "_blank")}
-  className="bg-blue-100 text-blue-700 px-3 py-1 rounded hover:bg-blue-200"
->
-  Review
-</button>
+                          </button>
                         </td>
                       </tr>
                     ))
                   ) : (
                     <tr>
-                      <td colSpan={2} className="px-6 py-4 text-center text-gray-500">
+                      <td colSpan={3} className="px-6 py-4 text-center text-gray-500">
                         No pending applications.
                       </td>
                     </tr>
@@ -112,6 +119,23 @@ export const AdminDashboard: React.FC = () => {
             </div>
           </div>
 
+          {/* CHART */}
+          <div className="bg-white p-6 rounded shadow h-80">
+            <h3 className="font-bold text-gray-700 mb-4">Verification Volume (last 6 months)</h3>
+            {stats && stats.monthly.length === 0 ? (
+              <p className="text-gray-500 text-sm">No verifications recorded yet.</p>
+            ) : (
+              <ResponsiveContainer width="100%" height="85%">
+                <BarChart data={(stats?.monthly ?? []).map(m => ({ ...m, name: monthLabel(m.name) }))}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="name" />
+                  <YAxis allowDecimals={false} />
+                  <Tooltip />
+                  <Bar dataKey="value" name="Verifications" fill="#1e3a8a" />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </div>
         </div>
 
         {/* RIGHT SIDE — FIXED APPROVED LIST */}
@@ -121,7 +145,7 @@ export const AdminDashboard: React.FC = () => {
               <Check size={20} className='text-gov-blue' /> Approved Institutions ({approvedInstitutions.length})
             </h3>
 
-            <div className="space-y-3 max-h-[350px] overflow-y-auto">
+            <div className="space-y-3 max-h-[560px] overflow-y-auto">
 
               {approvedInstitutions.length > 0 ? (
                 approvedInstitutions.map(inst => (
@@ -133,15 +157,15 @@ export const AdminDashboard: React.FC = () => {
 
                     <div className="flex gap-1">
                       <button
-                        onClick={() => handleEdit(inst.id!)}
+                        onClick={() => setSelectedInst(inst)}
                         className="text-blue-600 hover:text-blue-800 p-1 rounded"
-                        title="Edit Details"
+                        title="View Details"
                       >
-                        <Edit2 size={16} />
+                        <Eye size={16} />
                       </button>
 
                       <button
-                        onClick={() => handleDelete(inst.id!)}
+                        onClick={() => handleDelete(inst)}
                         className="text-red-600 hover:text-red-800 p-1 rounded"
                         title="Permanently Delete"
                       >
@@ -162,8 +186,8 @@ export const AdminDashboard: React.FC = () => {
 
       {/* REVIEW MODAL */}
       {selectedInst && (
-        <div className="fixed inset-0 bg-black/40 flex justify-center items-center z-50">
-          <div className="bg-white w-[450px] p-5 rounded-xl shadow-lg">
+        <div className="fixed inset-0 bg-black/40 flex justify-center items-center z-50 px-4">
+          <div className="bg-white w-full max-w-[450px] p-5 rounded-xl shadow-lg">
 
             <h2 className="text-xl font-bold mb-4">Review Institution</h2>
 
@@ -176,21 +200,24 @@ export const AdminDashboard: React.FC = () => {
               <p><strong>Principal:</strong> {selectedInst.principalName}</p>
               <p><strong>Email:</strong> {selectedInst.contactEmail}</p>
               <p><strong>Mobile:</strong> {selectedInst.mobile}</p>
+              <p><strong>Status:</strong> {selectedInst.status}</p>
             </div>
 
             <div className="flex justify-between mt-6">
-              <button
-                className="px-4 py-2 bg-green-600 text-white rounded flex items-center gap-1"
-                onClick={() => handleStatusUpdate(selectedInst.id!, 'ACTIVE')}
-              >
-                <Check size={18} /> Approve
-              </button>
+              {selectedInst.status !== 'ACTIVE' && (
+                <button
+                  className="px-4 py-2 bg-green-600 text-white rounded flex items-center gap-1"
+                  onClick={() => handleStatusUpdate(selectedInst.id, 'ACTIVE')}
+                >
+                  <Check size={18} /> Approve
+                </button>
+              )}
 
               <button
                 className="px-4 py-2 bg-red-600 text-white rounded flex items-center gap-1"
-                onClick={() => handleStatusUpdate(selectedInst.id!, 'REJECTED')}
+                onClick={() => handleStatusUpdate(selectedInst.id, 'REJECTED')}
               >
-                <X size={18} /> Reject
+                <X size={18} /> {selectedInst.status === 'ACTIVE' ? 'Revoke' : 'Reject'}
               </button>
 
               <button
@@ -205,47 +232,13 @@ export const AdminDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* CHART */}
-      <div className="bg-white p-6 rounded shadow h-80 mt-10">
-        <h3 className="font-bold text-gray-700 mb-4">Verification Volume</h3>
-
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={MONTHLY_STATS}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="name" />
-            <YAxis />
-            <Tooltip />
-            <Bar dataKey="value" fill="#1e3a8a" />
-          </BarChart>
-        </ResponsiveContainer>
+      {/* RECENT VERIFICATIONS */}
+      <div className="bg-white rounded shadow overflow-hidden mt-10">
+        <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
+          <h3 className="font-bold text-gray-700">Recent Verifications</h3>
+        </div>
+        <VerificationTable rows={stats?.recent ?? []} emptyText={stats ? 'No verifications yet.' : 'Loading…'} />
       </div>
-
-      <div className="bg-white p-6 rounded shadow h-80 mt-10 overflow-y-auto">
-  <h3 className="font-bold text-gray-700 mb-4">Verification Logs</h3>
-
-  <table className="w-full text-sm">
-    <thead>
-      <tr className="text-left border-b">
-        <th className="pb-2">Date</th>
-        <th className="pb-2">Documents</th>
-        <th className="pb-2">Merkle Root Hash</th>
-      </tr>
-    </thead>
-
-    <tbody>
-      <tr className="border-b hover:bg-gray-50">
-        <td className="py-2 text-gray-700">09-12-2025</td>
-        <td className="py-2 text-gray-700">30</td>
-        <td className="py-2 font-mono text-xs text-blue-700 truncate"
-            title="9fafe82b173f09d76a092adf0f6184c2d4a45f6f373648e961012c7c222abea3">
-          9fafe82b173f09d76a092adf0f6184c2d4a45f6f373648e961012c7c222abea3
-        </td>
-      </tr>
-
-
-    </tbody>
-  </table>
-</div>
 
     </div>
   );

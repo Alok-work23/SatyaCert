@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 
-const API_ENDPOINT = "https://vikingmachinelearningmodel.onrender.com/predict";
+const API_ENDPOINT =
+  import.meta.env.VITE_ML_API_URL ?? "https://vikingmachinelearningmodel.onrender.com/predict";
 
 export const DocumentAuthenticityForm: React.FC = () => {
   const [formData, setFormData] = useState({

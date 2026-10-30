@@ -6,23 +6,16 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "lint": "eslint .",
+    "typecheck": "tsc -b",
     "preview": "vite preview"
   },
   "dependencies": {
-    "cloudinary": "^2.8.0",
     "clsx": "^2.1.0",
-    "cors": "^2.8.5",
-    "dotenv": "^17.2.3",
-    "express": "^5.2.1",
     "firebase": "^10.8.0",
     "lucide-react": "^0.344.0",
-    "multer": "^2.0.2",
-    "multer-storage-cloudinary": "^4.0.0",
-    "node": "^20.19.6",
-    "nodemon": "^3.1.11",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "react-router-dom": "^6.28.0",
     "recharts": "^2.12.2",
     "tailwind-merge": "^2.2.1"
   },
@@ -36,9 +29,8 @@
     "typescript": "^5.5.3",
     "vite": "^5.4.21"
   },
-  "main": "local_setup.js",
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "description": ""
+  "description": "SatyaCert - academic certificate verification platform"
 }
