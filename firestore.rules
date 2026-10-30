@@ -1,0 +1,40 @@
+rules_version = '2';
+
+// Deploy with: firebase deploy --only firestore:rules,storage
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    // Admin is a custom claim, only settable server-side (backend/set_admin.py)
+    function isAdmin() { return signedIn() && request.auth.token.admin == true; }
+    function ownsDoc(data) { return signedIn() && data.uid == request.auth.uid; }
+    function keepsFields(fields) {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(fields);
+    }
+
+    match /users/{uid} {
+      allow read: if (signedIn() && request.auth.uid == uid) || isAdmin();
+      // Users may maintain their own profile but can never grant themselves a role
+      allow create, update: if signedIn() && request.auth.uid == uid
+                            && request.resource.data.get('role', 'USER') == 'USER';
+    }
+
+    // Registration creates a PENDING record; only an admin can approve, reject or delete it
+    match /institutions/{id} {
+      allow read: if ownsDoc(resource.data) || isAdmin();
+      allow create: if ownsDoc(request.resource.data) && request.resource.data.status == 'PENDING';
+      allow update: if isAdmin() || (ownsDoc(resource.data) && keepsFields(['status', 'uid']));
+      allow delete: if isAdmin();
+    }
+
+    match /organisations/{id} {
+      allow read: if ownsDoc(resource.data) || isAdmin();
+      allow create: if ownsDoc(request.resource.data) && request.resource.data.status == 'PENDING';
+      allow update: if isAdmin() || (ownsDoc(resource.data) && keepsFields(['status', 'uid']));
+      allow delete: if isAdmin();
+    }
+
+    // Verification history and statistics live in the backend (MongoDB), not Firestore.
+    // Anything not matched above is denied
+  }
+}

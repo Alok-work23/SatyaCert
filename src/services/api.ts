@@ -1,12 +1,11 @@
 import {
   collection, addDoc, getDocs, query, where, doc,
-  updateDoc, setDoc, Timestamp, orderBy, deleteDoc,
+  updateDoc, setDoc, Timestamp, deleteDoc, limit,
 } from "firebase/firestore";
 import * as firebaseAuth from "firebase/auth";
-import { db, auth, googleProvider, storage } from "../firebaseConfig";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { UserRole, Institution, VerificationRequest } from "../types";
-import { MONTHLY_STATS } from "../constants";
+import { db, auth, googleProvider } from "../firebaseConfig";
+import { UserRole, Institution, StatData } from "../types";
+import { API_BASE } from "../config";
 
 export interface FixedInstitution extends Institution { logo?: string; }
 export interface Organisation {
@@ -16,9 +15,130 @@ export interface Organisation {
 }
 export interface FixedOrganisation extends Organisation { id: string; }
 
+export interface Session {
+  role: UserRole;
+  uid: string;
+  email: string | null;
+  name: string;
+  id: string;            // institution / organisation doc id, or uid for other roles
+  avatar?: string | null;
+}
+
+export type VerificationOutcome = "AUTHENTIC" | "SUSPICIOUS" | "FORGED" | "NOT_FOUND";
+
+// One row of the backend's verification log
+export interface VerificationLogEntry {
+  source: "upload" | "manual" | "qr";
+  file_name?: string | null;
+  roll_no?: string | null;
+  semester?: string | null;
+  student_name?: string | null;
+  result: VerificationOutcome;
+  risk_level?: string | null;
+  created_at: string;
+}
+
+export interface AdminStats {
+  total: number;
+  by_result: Record<VerificationOutcome, number>;
+  monthly: StatData[];
+  recent: VerificationLogEntry[];
+}
+
+export interface InstitutionRecord {
+  roll_no?: string;
+  semester?: string;
+  name?: string;
+  cgpa?: number;
+  uploaded_at?: string;
+}
+
+export type QrStatus = "VALID" | "OUTDATED" | "REVOKED" | "INVALID";
+
+// Response of the public QR check (/public/verify-qr)
+export interface QrVerification {
+  status: QrStatus;
+  reason?: string;
+  certificate?: {
+    roll?: string; sem?: string; name?: string; cgpa?: number;
+    sgpa?: number; result?: string; uni?: string;
+  };
+  issued_at?: string | null;
+}
+
 let confirmationResult: firebaseAuth.ConfirmationResult | null = null;
 
+// Call the FastAPI backend with the signed-in user's Firebase ID token
+export const backendFetch = async (path: string, init: RequestInit = {}) => {
+  const user = auth.currentUser;
+  if (!user) throw new Error("Please sign in to continue.");
+  const headers = new Headers(init.headers);
+  headers.set("Authorization", `Bearer ${await user.getIdToken()}`);
+  return fetch(`${API_BASE}${path}`, { ...init, headers });
+};
+
+// backendFetch + JSON parsing; throws the backend's error message on failure
+export const backendJson = async <T>(path: string, init?: RequestInit): Promise<T> => {
+  const res = await backendFetch(path, init);
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const detail = body?.detail;
+    throw new Error(typeof detail === "string" ? detail : `Server error ${res.status}`);
+  }
+  return body as T;
+};
+
+const findOwnedDoc = async (collectionName: string, uid: string) => {
+  const snapshot = await getDocs(query(collection(db, collectionName), where("uid", "==", uid), limit(1)));
+  return snapshot.empty ? null : snapshot.docs[0];
+};
+
+const saveCitizenProfile = (user: firebaseAuth.User, fields: Record<string, unknown>) =>
+  setDoc(doc(db, "users", user.uid), { ...fields, role: UserRole.USER, lastLogin: Timestamp.now() }, { merge: true });
+
+// Sign in with email/password and require the resulting session to have `role`
+const loginAs = async (email: string, pass: string, role: UserRole, notFoundMessage: string) => {
+  const { user } = await firebaseAuth.signInWithEmailAndPassword(auth, email, pass);
+  try {
+    const session = await api.getSession(user, true);
+    if (session.role !== role) throw new Error(notFoundMessage);
+    return session;
+  } catch (e) {
+    await firebaseAuth.signOut(auth);
+    throw e;
+  }
+};
+
 export const api = {
+
+  // ── SESSION ────────────────────────────────────────────────────────────
+  // The role comes from verifiable sources, never from client storage:
+  // admin custom claim → approved institution → organisation → citizen.
+  // Backend endpoints and Firestore rules enforce the same rules server-side.
+  getSession: async (user: firebaseAuth.User, forceRefresh = false): Promise<Session> => {
+    const base = { uid: user.uid, email: user.email, name: user.displayName || "User", id: user.uid, avatar: user.photoURL };
+
+    const { claims } = await user.getIdTokenResult(forceRefresh);
+    if (claims.admin === true) return { ...base, role: UserRole.ADMIN, name: user.displayName || "Administrator" };
+
+    const inst = await findOwnedDoc("institutions", user.uid);
+    if (inst) {
+      const data = inst.data() as FixedInstitution;
+      if (data.status === "PENDING") throw new Error("Your account is pending approval.");
+      if (data.status === "REJECTED") throw new Error("Your account request was rejected.");
+      return { ...base, role: UserRole.INSTITUTION, name: data.name, id: inst.id };
+    }
+
+    const org = await findOwnedDoc("organisations", user.uid);
+    if (org) {
+      const data = org.data() as Organisation;
+      if (data.status === "PENDING") throw new Error("Your organisation is pending approval.");
+      if (data.status === "REJECTED") throw new Error("Your organisation request was rejected.");
+      return { ...base, role: UserRole.ORGANISATION, name: data.name, id: org.id };
+    }
+
+    return { ...base, role: UserRole.USER };
+  },
 
   // ── CITIZEN: Google Login (redirect-based, COOP-safe) ──────────────────
 
@@ -32,46 +152,22 @@ export const api = {
     const result = await firebaseAuth.getRedirectResult(auth);
     if (!result) return null; // No redirect in progress
 
-    const user = result.user;
-    await setDoc(
-      doc(db, "users", user.uid),
-      {
-        name: user.displayName,
-        email: user.email,
-        role: UserRole.USER,
-        lastLogin: Timestamp.now(),
-      },
-      { merge: true }
-    );
-
-    return {
-      name: user.displayName || "User",
-      email: user.email,
-      role: UserRole.USER,
-      token: await user.getIdToken(),
-      avatar: user.photoURL,
-      uid: user.uid,
-    };
+    const session = await api.getSession(result.user);
+    if (session.role === UserRole.USER) {
+      await saveCitizenProfile(result.user, { name: result.user.displayName, email: result.user.email });
+    }
+    return session;
   },
 
   // Keep popup as fallback (works in some browsers)
   loginGoogle: async () => {
     try {
-      const result = await firebaseAuth.signInWithPopup(auth, googleProvider);
-      const user = result.user;
-      await setDoc(
-        doc(db, "users", user.uid),
-        { name: user.displayName, email: user.email, role: UserRole.USER, lastLogin: Timestamp.now() },
-        { merge: true }
-      );
-      return {
-        name: user.displayName || "User",
-        email: user.email,
-        role: UserRole.USER,
-        token: await user.getIdToken(),
-        avatar: user.photoURL,
-        uid: user.uid,
-      };
+      const { user } = await firebaseAuth.signInWithPopup(auth, googleProvider);
+      const session = await api.getSession(user);
+      if (session.role === UserRole.USER) {
+        await saveCitizenProfile(user, { name: user.displayName, email: user.email });
+      }
+      return session;
     } catch (error: any) {
       // If popup blocked, fall back to redirect
       if (
@@ -99,48 +195,21 @@ export const api = {
 
   verifyOtp: async (otp: string) => {
     if (!confirmationResult) throw new Error("OTP was not sent or expired.");
-    const result = await confirmationResult.confirm(otp);
-    const user = result.user;
-    await setDoc(
-      doc(db, "users", user.uid),
-      { mobile: user.phoneNumber, role: UserRole.USER, lastLogin: Timestamp.now() },
-      { merge: true }
-    );
-    return {
-      name: "Citizen User", mobile: user.phoneNumber,
-      role: UserRole.USER, token: await user.getIdToken(), uid: user.uid,
-    };
+    const { user } = await confirmationResult.confirm(otp);
+    await saveCitizenProfile(user, { mobile: user.phoneNumber });
+    return { ...(await api.getSession(user)), name: "Citizen User" };
   },
 
-  // ── INSTITUTION LOGIN ──────────────────────────────────────────────────
+  // ── ADMIN / INSTITUTION / ORGANISATION LOGIN ───────────────────────────
 
-  loginInstitution: async (email: string, pass: string) => {
-    const result = await firebaseAuth.signInWithEmailAndPassword(auth, email, pass);
-    const q = query(collection(db, "institutions"), where("contactEmail", "==", email));
-    const snapshot = await getDocs(q);
-    if (snapshot.empty) throw new Error("Institution not registered.");
-    const instData = snapshot.docs[0].data() as FixedInstitution;
-    if (instData.status === "PENDING") throw new Error("Your account is pending approval.");
-    if (instData.status === "REJECTED") throw new Error("Your account request was rejected.");
-    return {
-      name: instData.name, role: UserRole.INSTITUTION,
-      id: snapshot.docs[0].id, token: await result.user.getIdToken(), uid: result.user.uid,
-    };
-  },
+  loginAdmin: (email: string, pass: string) =>
+    loginAs(email, pass, UserRole.ADMIN, "This account does not have administrator access."),
 
-  // ── ORGANISATION LOGIN ─────────────────────────────────────────────────
+  loginInstitution: (email: string, pass: string) =>
+    loginAs(email, pass, UserRole.INSTITUTION, "Institution not registered."),
 
-  loginOrganisation: async (email: string, pass: string) => {
-    const result = await firebaseAuth.signInWithEmailAndPassword(auth, email, pass);
-    const q = query(collection(db, "organisations"), where("email", "==", email));
-    const snapshot = await getDocs(q);
-    if (snapshot.empty) throw new Error("Organisation not registered.");
-    const orgData = snapshot.docs[0].data() as FixedOrganisation;
-    return {
-      name: orgData.name, role: UserRole.ORGANISATION,
-      id: snapshot.docs[0].id, token: await result.user.getIdToken(), uid: result.user.uid,
-    };
-  },
+  loginOrganisation: (email: string, pass: string) =>
+    loginAs(email, pass, UserRole.ORGANISATION, "Organisation not registered."),
 
   // ── LOGOUT ─────────────────────────────────────────────────────────────
   logout: async () => { await firebaseAuth.signOut(auth); },
@@ -186,67 +255,42 @@ export const api = {
     return true;
   },
 
-  // ── VERIFICATION QUEUE ─────────────────────────────────────────────────
-  submitVerificationRequest: async (file: File, userId: string) => {
-    const docRef = await addDoc(collection(db, "verification_queue"), {
-      userId, fileName: file.name, status: "PENDING",
-      type: "DOCUMENT", submittedAt: Timestamp.now(),
-    });
-    return { requestId: docRef.id };
+  // ── ORGANISATION LIST (admin) ──────────────────────────────────────────
+  getAllOrganisations: async () => {
+    const snapshot = await getDocs(collection(db, "organisations"));
+    return snapshot.docs.map(d => ({ id: d.id, ...d.data() })) as FixedOrganisation[];
   },
 
-  submitManualRequest: async (details: any, userId: string) => {
-    const docRef = await addDoc(collection(db, "verification_queue"), {
-      userId, details, status: "PENDING", type: "MANUAL", submittedAt: Timestamp.now(),
-    });
-    return { requestId: docRef.id };
+  updateOrganisationStatus: async (id: string, status: "ACTIVE" | "REJECTED") => {
+    await updateDoc(doc(db, "organisations", id), { status });
+    return true;
   },
 
-  getUserRequests: async (userId: string) => {
-    if (!userId) return [];
-    try {
-      const q = query(
-        collection(db, "verification_queue"),
-        where("userId", "==", userId),
-        orderBy("submittedAt", "desc")
-      );
-      const snapshot = await getDocs(q);
-      return snapshot.docs.map(d => {
-        const data = d.data();
-        return { id: d.id, ...data, submittedAt: data.submittedAt?.toDate?.()?.toLocaleString() || "" } as VerificationRequest;
-      });
-    } catch {
-      const q = query(collection(db, "verification_queue"), where("userId", "==", userId));
-      const snapshot = await getDocs(q);
-      return snapshot.docs.map(d => ({ id: d.id, ...d.data() } as VerificationRequest));
-    }
+  deleteOrganisation: async (id: string) => {
+    await deleteDoc(doc(db, "organisations", id));
+    return true;
   },
 
-  // ── ORGANISATION UPLOADS ───────────────────────────────────────────────
-  uploadOrganisationDocument: async (formData: FormData) => {
-    const file = formData.get("file") as File;
-    const organisationId = formData.get("organisationId") as string;
-    if (!file || !organisationId) throw new Error("File or organisationId missing");
-    const fileRef = ref(storage, `organisation_uploads/${organisationId}/${Date.now()}_${file.name}`);
-    const snap = await uploadBytes(fileRef, file);
-    const fileUrl = await getDownloadURL(snap.ref);
-    const docRef = await addDoc(collection(db, "organisation_uploads"), {
-      organisationId, fileName: file.name, fileUrl, status: "PENDING", uploadedAt: Timestamp.now(),
-    });
-    return { id: docRef.id };
-  },
+  // ── BACKEND DATA ───────────────────────────────────────────────────────
+  getMyVerifications: () =>
+    backendJson<{ verifications: VerificationLogEntry[] }>("/verifications/mine").then(r => r.verifications),
 
-  getOrganisationUploads: async (organisationId: string) => {
-    if (!organisationId) return [];
-    const snapshot = await getDocs(query(
-      collection(db, "organisation_uploads"),
-      where("organisationId", "==", organisationId)
-    ));
-    return snapshot.docs
-      .map(d => ({ id: d.id, ...d.data() }))
-      .sort((a: any, b: any) => (b.uploadedAt?.toMillis?.() || 0) - (a.uploadedAt?.toMillis?.() || 0));
-  },
+  getInstitutionRecords: () =>
+    backendJson<{ records: InstitutionRecord[] }>("/institution/records").then(r => r.records),
 
-  // ── ADMIN STATS ────────────────────────────────────────────────────────
-  getAdminStats: async () => MONTHLY_STATS,
+  getAdminStats: () => backendJson<AdminStats>("/admin/stats"),
+
+  // Signed QR token for one of the institution's records; the QR encodes `${origin}/v/${token}`
+  getRecordQrToken: (rollNo: string, semester: string) =>
+    backendJson<{ token: string }>(
+      `/institution/records/qr?${new URLSearchParams({ roll_no: rollNo, semester })}`
+    ).then(r => r.token),
+
+  // Public: no sign-in needed, so anyone scanning a certificate can check it
+  verifyQr: async (token: string): Promise<QrVerification> => {
+    const res = await fetch(`${API_BASE}/public/verify-qr?${new URLSearchParams({ token })}`);
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(typeof body?.detail === "string" ? body.detail : `Server error ${res.status}`);
+    return body as QrVerification;
+  },
 };

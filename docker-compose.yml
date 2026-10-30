@@ -1,0 +1,44 @@
+# Run everything: docker compose up --build
+#   Frontend → http://localhost:8080   Backend → http://localhost:8000
+# Needs backend/.env, backend/firebase-service-account.json, backend/signing-key.pem and the root .env (see README).
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    env_file: backend/.env
+    environment:
+      FIREBASE_CREDENTIALS: /run/secrets/firebase_service_account
+      SIGNING_KEY_PATH: /run/secrets/signing_key
+      CORS_ORIGINS: http://localhost:8080
+    secrets:
+      - firebase_service_account
+      - signing_key
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      args:
+        VITE_API_URL: http://localhost:8000
+        VITE_API_KEY: ${VITE_API_KEY}
+        VITE_AUTH_DOMAIN: ${VITE_AUTH_DOMAIN}
+        VITE_PROJECT_ID: ${VITE_PROJECT_ID}
+        VITE_STORAGE_BUCKET: ${VITE_STORAGE_BUCKET}
+        VITE_MESSAGING_SENDER_ID: ${VITE_MESSAGING_SENDER_ID}
+        VITE_APP_ID: ${VITE_APP_ID}
+        VITE_MEASUREMENT_ID: ${VITE_MEASUREMENT_ID}
+        VITE_ML_API_URL: ${VITE_ML_API_URL:-https://vikingmachinelearningmodel.onrender.com/predict}
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+secrets:
+  firebase_service_account:
+    file: backend/firebase-service-account.json
+  signing_key:
+    file: backend/signing-key.pem

@@ -14,7 +14,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onNavigate, currentUser, role, o
   const handleDashboardClick = () => {
     if (role === 'ADMIN') onNavigate('admin-dashboard');
     else if (role === 'INSTITUTION') onNavigate('institution-dashboard');
-    else if (role === 'ORGANISATION') onNavigate('user-dashboard');
+    else if (role === 'ORGANISATION') onNavigate('organisation-dashboard');
     else onNavigate('user-dashboard');
   };
 

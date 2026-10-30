@@ -1,4 +1,24 @@
 import json
+import re
+
+
+def normalize(value):
+    """
+    Canonical form for leaf comparison, so formatting noise is not reported as tampering:
+    numbers and numeric strings compare by value ("8.50" == 8.5), other strings ignore
+    case and repeated whitespace ("Asha  Kumari" == "ASHA KUMARI").
+    """
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        text = re.sub(r"\s+", " ", value).strip()
+        try:
+            return float(text)
+        except ValueError:
+            return text.casefold()
+    return value
 
 
 def is_ignored(value):
@@ -19,7 +39,8 @@ def compare_json(obj1, obj2):
     if isinstance(obj1, dict) and isinstance(obj2, dict):
         diff = {}
         for key in set(obj1.keys()) | set(obj2.keys()):
-            if key in ("_id", "__v"):
+            # Internal keys (_id, __v, _meta, _extraction…) are never part of the comparison
+            if key.startswith("_"):
                 continue
             d = compare_json(obj1.get(key), obj2.get(key))
             if d is not None:
@@ -39,7 +60,7 @@ def compare_json(obj1, obj2):
                 any_diff = True
         return diff_list if any_diff else None
 
-    if obj1 != obj2:
+    if normalize(obj1) != normalize(obj2):
         return {"uploaded": obj1, "database": obj2}
 
     return None
@@ -124,6 +145,30 @@ def generate_verdict(mismatches: list) -> dict:
         "critical_mismatches": critical,
         "non_critical_mismatches": non_critical,
     }
+
+
+def get_path(obj, path: str):
+    """Read a dotted path such as 'marksheet.academic_info.cgpa' from nested dicts."""
+    for key in path.split("."):
+        if not isinstance(obj, dict):
+            return None
+        obj = obj.get(key)
+    return obj
+
+
+def compare_fields(claimed: dict, record: dict) -> dict:
+    """
+    Partial comparison: check only the given {dotted path: value} claims against the
+    record. Used for manual entry and for OCR'd scans, where only key fields are known.
+    """
+    mismatches = []
+    for path, value in claimed.items():
+        if is_ignored(value):
+            continue
+        db_value = get_path(record, path)
+        if normalize(value) != normalize(db_value):
+            mismatches.append({"field": path, "uploaded_value": value, "database_value": db_value})
+    return {"verdict": generate_verdict(mismatches), "diff": {}}
 
 
 def compare_json_files(json1: dict, json2: dict) -> dict:

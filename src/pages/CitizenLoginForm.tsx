@@ -23,11 +23,7 @@ export const CitizenLoginForm: React.FC<CitizenLoginFormProps> = ({
       try {
         const user = await api.handleGoogleRedirectResult();
         if (user) {
-          // ── CRITICAL: save role BEFORE calling onLogin ──
-          // onAuthStateChanged fires first on reload and checks localStorage.
-          // If role isn't saved yet, it won't redirect. Save it now.
-          localStorage.setItem('satyacert_role', UserRole.USER);
-          onLogin(UserRole.USER, user);
+          onLogin(user.role, user);
         }
       } catch (e: any) {
         if (e?.code && e.code !== 'auth/null-user') {

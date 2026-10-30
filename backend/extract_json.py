@@ -10,6 +10,23 @@ INPUT_FOLDER = "uploads"
 OUTPUT_FOLDER = "extracted_json"
 
 
+class ScannedPdfError(Exception):
+    """The PDF has no text layer and OCR is unavailable or found nothing."""
+
+
+def ocr_pdf_text(pdf) -> str:
+    """OCR every page of an open pdfplumber PDF. Requires the Tesseract binary + pytesseract."""
+    try:
+        import pytesseract
+        pytesseract.get_tesseract_version()
+    except Exception:
+        raise ScannedPdfError(
+            "This PDF is a scanned image with no text layer, and OCR (Tesseract) is not installed on the server."
+        )
+    pages = [pytesseract.image_to_string(page.to_image(resolution=300).original) for page in pdf.pages]
+    return "\n".join(pages)
+
+
 def clean_text(text):
     if text:
         return text.strip()
@@ -40,6 +57,7 @@ def safe_int(value):
 
 def extract_fields_from_pdf(pdf_path):
     data = {"text_content": "", "tables": []}
+    method = "text"
 
     with pdfplumber.open(pdf_path) as pdf:
         for page in pdf.pages:
@@ -49,6 +67,13 @@ def extract_fields_from_pdf(pdf_path):
             tables = page.extract_tables()
             for table in tables:
                 data["tables"].append(table)
+
+        # Scanned certificate: no text layer, fall back to OCR (tables are not recovered)
+        if not data["text_content"].strip():
+            data["text_content"] = ocr_pdf_text(pdf)
+            method = "ocr"
+            if not data["text_content"].strip():
+                raise ScannedPdfError("OCR could not read any text from this PDF.")
 
     text = data["text_content"]
 
@@ -68,7 +93,8 @@ def extract_fields_from_pdf(pdf_path):
     roll_no = roll_match.group(1) if roll_match else None
 
     # --- Student Name ---
-    name_match = re.search(r"Student['\u2019]?s Name[:\s]*([A-Za-z\s\.]+)", text, re.IGNORECASE)
+    # Stay on the name's own line: a 2-word name must not absorb the next line's first word
+    name_match = re.search(r"Student['\u2019]?s Name[: \t]*([A-Za-z \t\.]+)", text, re.IGNORECASE)
     student_name = ' '.join(clean_text(name_match.group(1)).split()[:3]) if name_match else ""
 
     # --- Semester ---
@@ -125,6 +151,7 @@ def extract_fields_from_pdf(pdf_path):
         "sgpa": sgpa,
         "cgpa": cgpa,
         "subjects": subjects_list,
+        "method": method,
     }
 
 
@@ -144,6 +171,8 @@ def build_json_output(extracted: dict) -> dict:
         total_credits += c
 
     return {
+        # How the text was obtained ("text" or "ocr"); ignored by the comparison engine
+        "_extraction": extracted.get("method", "text"),
         "marksheet": {
             "rollNo": extracted["roll_no"],
             "university": extracted["university"],
@@ -175,10 +204,10 @@ def build_json_output(extracted: dict) -> dict:
     }
 
 
-def process_single_pdf(pdf_path: str) -> dict:
+def process_single_pdf(pdf_path) -> dict:
     """
-    Process ONE specific PDF file and return the JSON dict.
-    Used by main.py endpoints that already know which file to process.
+    Process ONE PDF and return the JSON dict.
+    Accepts a file path or a binary file-like object (main.py passes in-memory bytes).
     """
     extracted = extract_fields_from_pdf(pdf_path)
     return build_json_output(extracted)

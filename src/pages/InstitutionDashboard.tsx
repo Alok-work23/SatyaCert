@@ -1,54 +1,29 @@
-import React, { useState } from 'react';
-import { Upload, CheckCircle, X, FileText } from 'lucide-react';
-import { api } from '../services/api';
+import React, { useCallback, useEffect, useState } from 'react';
+import { Database, Loader2, QrCode } from 'lucide-react';
+import { api, InstitutionRecord } from '../services/api';
+import { formatDate } from '../components/VerificationHistory';
+import { CertificateQrModal } from '../components/CertificateQrModal';
 import UploadDoc from './UploadDoc';
 
-interface Props { 
+interface Props {
   institutionName?: string;
-  institutionId?: string; 
 }
 
-export const InstitutionDashboard: React.FC<Props> = ({ institutionName, institutionId }) => {
+export const InstitutionDashboard: React.FC<Props> = ({ institutionName }) => {
+  const [records, setRecords] = useState<InstitutionRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [qrRecord, setQrRecord] = useState<InstitutionRecord | null>(null);
 
-  const [modalOpen, setModalOpen] = useState(false);
-  const [category, setCategory] = useState("");
-  const [year, setYear] = useState("");
-  const [files, setFiles] = useState<File[]>([]);
-  const [uploading, setUploading] = useState(false);
-  const [success, setSuccess] = useState(false);
+  const loadRecords = useCallback(() => {
+    setError('');
+    api.getInstitutionRecords()
+      .then(setRecords)
+      .catch(e => setError(e instanceof Error ? e.message : 'Could not load records.'))
+      .finally(() => setLoading(false));
+  }, []);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      setFiles(Array.from(e.target.files));
-    }
-  };
-
-  const handleUpload = async () => {
-    if (!category || !year || files.length === 0) {
-      alert("All fields are required.");
-      return;
-    }
-
-    setUploading(true);
-    setSuccess(false);
-
-    try {
-      // Simulate upload (replace this with actual upload logic)
-      await new Promise(res => setTimeout(res, 1500));
-      
-      setSuccess(true);
-      setUploading(false);
-
-      // Clear form
-      setCategory("");
-      setYear("");
-      setFiles([]);
-
-    } catch (err) {
-      alert("Upload failed");
-      setUploading(false);
-    }
-  };
+  useEffect(loadRecords, [loadRecords]);
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-8">
@@ -59,7 +34,7 @@ export const InstitutionDashboard: React.FC<Props> = ({ institutionName, institu
           <h1 className="text-2xl font-bold text-gray-900 font-serif">
             Welcome, {institutionName || "Institution"}
           </h1>
-          <p className="text-sm text-gray-500">Upload and manage your institution documents.</p>
+          <p className="text-sm text-gray-500">Upload authentic marksheets so certificates can be verified against them.</p>
         </div>
 
         <div className="bg-blue-50 text-gov-blue px-4 py-2 rounded border border-blue-200 font-mono text-sm">
@@ -67,122 +42,58 @@ export const InstitutionDashboard: React.FC<Props> = ({ institutionName, institu
         </div>
       </div>
 
-      {/* UPLOAD DOCUMENT BUTTON */}
-      <UploadDoc />
-      {/* <div className="bg-white p-8 rounded shadow border border-gray-200 text-center">
-        <h2 className="text-xl font-bold text-gray-800 mb-4">Upload Documents</h2>
-        <p className="text-gray-600 text-sm mb-6">
-          Upload PDFs such as marksheets, fee receipts, degrees, or other certificates.
-        </p>
+      <UploadDoc onUploaded={loadRecords} />
 
-        <button
-          onClick={() => setModalOpen(true)}
-          className="bg-gov-blue text-white px-6 py-3 rounded font-semibold shadow hover:bg-blue-700 transition"
-        >
-          Upload Documents
-        </button> */}
-        {/* <button
-  onClick={() => window.location.href = "http://10.195.115.216:9001"}
-  className="bg-gov-blue text-white px-6 py-3 rounded font-semibold shadow hover:bg-blue-700 transition"
->
-  Upload Documents
-</button> 
-
-      </div>
-*/}
-
-      {/* ---------------- MODAL (POPUP) ---------------- */}
-      {modalOpen && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white w-full max-w-lg rounded-lg shadow-lg p-6 relative">
-
-            {/* Close Button */}
-            <button onClick={() => setModalOpen(false)} className="absolute right-4 top-4 text-gray-500 hover:text-black">
-              <X size={20} />
-            </button>
-
-            <h2 className="text-xl font-bold text-gray-800 mb-4">Upload Document Details</h2>
-
-            {/* SUCCESS MESSAGE */}
-            {success && (
-              <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded mb-4 flex items-center gap-2">
-                <CheckCircle size={20} className="text-green-600" />
-                Uploaded successfully!
-              </div>
-            )}
-
-            {/* FORM */}
-            <div className="space-y-4">
-
-              {/* CATEGORY */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
-                <select 
-                  className="w-full border p-2 rounded"
-                  value={category}
-                  onChange={e => setCategory(e.target.value)}
-                >
-                  <option value="">Select Category</option>
-                  <option value="Marksheet">Marksheet</option>
-                  <option value="Fees Receipt">Fees Receipt</option>
-                  <option value="Degree">Degree</option>
-                  <option value="Other Certificate">Other Certificate</option>
-                </select>
-              </div>
-
-              {/* YEAR */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Year</label>
-                <input 
-                  type="text"
-                  placeholder="e.g. 2024"
-                  className="w-full border p-2 rounded"
-                  value={year}
-                  onChange={e => setYear(e.target.value)}
-                />
-              </div>
-
-              {/* PDF UPLOAD */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Upload PDF(s)</label>
-                <input 
-                  type="file"
-                  accept="application/pdf"
-                  multiple
-                  onChange={handleFileChange}
-                />
-
-                {files.length > 0 && (
-                  <ul className="mt-2 text-sm text-gray-700 list-disc list-inside">
-                    {files.map((file, idx) => (
-                      <li key={idx}>{file.name}</li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-
-              {/* BUTTONS */}
-              <div className="flex justify-end gap-4 mt-4">
-                <button 
-                  onClick={() => setModalOpen(false)} 
-                  className="px-4 py-2 bg-gray-100 rounded hover:bg-gray-200"
-                >
-                  Cancel
-                </button>
-
-                <button 
-                  onClick={handleUpload}
-                  disabled={uploading}
-                  className="px-4 py-2 bg-gov-blue text-white rounded shadow hover:bg-blue-700 disabled:opacity-50"
-                >
-                  {uploading ? "Uploading..." : "Upload"}
-                </button>
-              </div>
-
-            </div>
-          </div>
+      {/* RECORDS UPLOADED BY THIS INSTITUTION */}
+      <div className="bg-white rounded shadow overflow-hidden mt-10">
+        <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
+          <h3 className="font-bold text-gray-700 flex items-center gap-2">
+            <Database size={18} /> Uploaded Records ({records.length})
+          </h3>
         </div>
-      )}
+        {loading ? (
+          <div className="flex justify-center py-10"><Loader2 className="animate-spin text-gov-blue" /></div>
+        ) : error ? (
+          <div className="px-6 py-8 text-center text-red-600 text-sm">{error}</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  {['Roll No', 'Semester', 'Student', 'CGPA', 'Uploaded', 'QR'].map(h => (
+                    <th key={h} className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {records.map((r, i) => (
+                  <tr key={i}>
+                    <td className="px-6 py-4 text-sm font-mono text-gray-900">{r.roll_no ?? '—'}</td>
+                    <td className="px-6 py-4 text-sm text-gray-700">{r.semester ?? '—'}</td>
+                    <td className="px-6 py-4 text-sm text-gray-700">{r.name || '—'}</td>
+                    <td className="px-6 py-4 text-sm text-gray-700">{r.cgpa ?? '—'}</td>
+                    <td className="px-6 py-4 text-sm text-gray-500 whitespace-nowrap">{formatDate(r.uploaded_at)}</td>
+                    <td className="px-6 py-4">
+                      <button
+                        onClick={() => setQrRecord(r)}
+                        className="text-gov-blue hover:text-blue-900 p-1 rounded"
+                        title="Signed QR code for this certificate"
+                      >
+                        <QrCode size={18} />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {records.length === 0 && (
+                  <tr><td colSpan={6} className="px-6 py-8 text-center text-gray-500">No records uploaded yet.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {qrRecord && <CertificateQrModal record={qrRecord} onClose={() => setQrRecord(null)} />}
     </div>
   );
 };
