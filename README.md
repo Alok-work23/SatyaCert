@@ -194,7 +194,6 @@ SatyaCert/
 │   ├── firebaseConfig.ts
 │   └── App.tsx              # Routes + session handling
 ├── firestore.rules          # Firestore security rules
-├── storage.rules            # Cloud Storage rules (deny all)
 ├── docker-compose.yml
 ├── requirements.txt
 └── package.json
@@ -281,10 +280,11 @@ npm run dev
 
 ### Security Setup (one-time)
 
-1. **Deploy the Firestore & Storage security rules** (requires the [Firebase CLI](https://firebase.google.com/docs/cli)):
+1. **Deploy the Firestore security rules** (requires the [Firebase CLI](https://firebase.google.com/docs/cli)):
    ```bash
-   firebase deploy --only firestore:rules,storage
+   firebase deploy --only firestore:rules
    ```
+   The app does not use Firebase Storage (PDFs are processed in memory and never stored), so it does not need to be enabled.
 2. **Create an administrator.** Add the user in **Firebase console → Authentication → Add user**, then grant the role:
    ```bash
    cd backend
