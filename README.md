@@ -55,15 +55,18 @@ Traditional verification is manual, time-consuming, expensive, difficult to scal
 ## ✨ Key Features
 
 ### 📄 Certificate Verification
-- Upload certificate PDFs
-- Automatic OCR-based field extraction
+- Upload certificate PDFs — processed in memory, never stored
+- Or type in roll no, semester and name for a quick manual check (the record itself is never revealed)
+- Automatic field extraction, with Tesseract OCR fallback for scanned certificates
 - Cross-reference against institutional database
-- Instant authenticity verdict
+- Instant authenticity verdict, saved to the user's verification history
 
 ### 🔍 OCR Pipeline
 Extracts: Student Name, Roll Number, Registration Number, University, Semester, SGPA, CGPA, Subject-wise Marks, Result Status
 
-Supports: Multi-page PDFs, embedded tables, complex marksheets
+Supports: Multi-page PDFs, embedded tables, complex marksheets, scanned (image-only) PDFs via OCR
+
+Comparison tolerates formatting noise — case, extra spaces, `8.5` vs `8.50`, semester `IV` vs `4` — so only real differences are flagged.
 
 ### 🛡️ Forgery Detection
 The comparison engine recursively validates every extracted field against institutional records.
@@ -146,12 +149,12 @@ Critical fields: Student Name, Roll Number, CGPA, SGPA, Result Status
 | Frontend | React 18 + TypeScript + Vite |
 | Styling | Tailwind CSS |
 | Backend | FastAPI + Python |
-| OCR | pdfplumber |
-| Database | MongoDB Atlas |
-| Authentication | Firebase Auth (Google OAuth + Email) |
-| Storage | Cloudinary |
-| HTTP Client | httpx (async) |
+| Routing | React Router (code-split pages) |
+| Extraction / OCR | pdfplumber + Tesseract (pytesseract) |
+| Database | MongoDB Atlas (records + verification logs), Cloud Firestore (accounts) |
+| Authentication | Firebase Auth (Google OAuth + Email) verified server-side with Firebase Admin SDK |
 | Server | Uvicorn |
+| Deployment | Docker Compose (nginx + FastAPI), GitHub Actions CI |
 
 ---
 
@@ -161,34 +164,50 @@ Critical fields: Student Name, Roll Number, CGPA, SGPA, Result Status
 SatyaCert/
 ├── backend/
 │   ├── main.py              # FastAPI app — all endpoints
-│   ├── extract_json.py      # OCR pipeline using pdfplumber
-│   ├── compare_json.py      # Recursive diff engine + forgery verdict
-│   └── requirements.txt
+│   ├── auth.py              # Firebase token verification + role checks
+│   ├── extract_json.py      # PDF field extraction (pdfplumber, Tesseract OCR fallback)
+│   ├── compare_json.py      # Diff engine + forgery verdict
+│   ├── set_admin.py         # Grant/revoke the admin role
+│   ├── tests/               # pytest suite
+│   └── Dockerfile
 ├── src/
-│   ├── components/          # Navbar, Footer, DocumentAuthenticityForm
+│   ├── components/          # Navbar, Footer, VerificationHistory, DocumentAuthenticityForm
 │   ├── pages/               # LandingPage, Auth, Dashboards, VerificationFlow
 │   ├── services/
 │   │   └── api.ts           # Firebase + FastAPI integration layer
+│   ├── config.ts            # Backend URL
 │   ├── firebaseConfig.ts
-│   ├── types.ts
-│   └── App.tsx
-├── package.json
-├── vite.config.ts
-└── README.md
+│   └── App.tsx              # Routes + session handling
+├── firestore.rules          # Firestore security rules
+├── storage.rules            # Cloud Storage rules (deny all)
+├── docker-compose.yml
+├── requirements.txt
+└── package.json
 ```
 
 ---
 
 ## 🚀 Getting Started
 
-### Clone the Repository
+### Option A — Docker (everything in one command)
+
+After creating the three config files described below (`.env`, `backend/.env`, `backend/firebase-service-account.json`):
+
+```bash
+docker compose up --build
+# App: http://localhost:8080   API: http://localhost:8000/docs
+```
+
+### Option B — Run locally
+
+#### Clone the Repository
 
 ```bash
 git clone https://github.com/Alok-work23/SatyaCert.git
 cd SatyaCert
 ```
 
-### Backend Setup
+#### Backend Setup
 
 ```bash
 cd backend
@@ -199,15 +218,21 @@ python -m venv .venv
 # Linux / macOS
 source .venv/bin/activate
 
-pip install -r requirements.txt
+pip install -r ../requirements.txt
 ```
 
-Create `backend/.env`:
+For scanned (image-only) certificates, also install the [Tesseract OCR](https://github.com/UB-Mannheim/tesseract/wiki) binary and make sure `tesseract` is on your PATH. Text-based PDFs work without it.
+
+Copy `backend/.env.example` to `backend/.env` and fill it in:
 ```env
 ATLAS_DB_URL=your_mongodb_connection_string
 DB_NAME=academia_authenticator
 COLLECTION_NAME=marksheets
+FIREBASE_CREDENTIALS=./firebase-service-account.json
+CORS_ORIGINS=http://localhost:5173
 ```
+
+Download the service-account key from **Firebase console → Project settings → Service accounts → Generate new private key** and save it as `backend/firebase-service-account.json` (it is git-ignored — never commit it).
 
 Run:
 ```bash
@@ -216,13 +241,13 @@ python main.py
 # Swagger Docs: http://localhost:8000/docs
 ```
 
-### Frontend Setup
+#### Frontend Setup
 
 ```bash
 npm install
 ```
 
-Create `.env` in project root:
+Copy `.env.example` to `.env` in the project root and fill it in:
 ```env
 VITE_API_KEY=your_firebase_api_key
 VITE_AUTH_DOMAIN=your_project.firebaseapp.com
@@ -239,17 +264,49 @@ npm run dev
 # App: http://localhost:5173
 ```
 
+### Security Setup (one-time)
+
+1. **Deploy the Firestore & Storage security rules** (requires the [Firebase CLI](https://firebase.google.com/docs/cli)):
+   ```bash
+   firebase deploy --only firestore:rules,storage
+   ```
+2. **Create an administrator.** Add the user in **Firebase console → Authentication → Add user**, then grant the role:
+   ```bash
+   cd backend
+   python set_admin.py admin@example.gov.in          # --revoke to remove
+   ```
+   The admin role is a Firebase custom claim, so it cannot be granted from the browser.
+
+### Running Tests
+
+```bash
+cd backend
+pip install -r requirements-dev.txt
+python -m pytest tests
+```
+
 ---
 
 ## 🔌 API Endpoints
 
-| Method | Endpoint | Description |
-|---|---|---|
-| `POST` | `/verify/` | Upload PDF → extract → compare → verdict |
-| `POST` | `/uploadMongo` | Institution uploads authentic certificate to DB |
-| `POST` | `/uploadFile/` | Upload PDF and extract fields only |
-| `POST` | `/save-pdf-to-server` | Fetch and process PDF from Cloudinary URL |
-| `GET` | `/` | Health check |
+All endpoints except `/` require `Authorization: Bearer <Firebase ID token>`.
+
+| Method | Endpoint | Who | Description |
+|---|---|---|---|
+| `POST` | `/verify/` | Signed-in user | Upload PDF → extract → compare → verdict |
+| `POST` | `/verify-manual/` | Signed-in user | Check typed-in roll no / semester / name (/ CGPA) |
+| `GET` | `/verifications/mine` | Signed-in user | The caller's verification history |
+| `POST` | `/uploadMongo` | Approved institution / admin | Upload authentic certificate to DB |
+| `GET` | `/institution/records` | Approved institution / admin | Records uploaded by the caller's institution |
+| `GET` | `/admin/stats` | Admin | Verification totals, monthly volume, recent activity |
+| `POST` | `/uploadFile/` | Signed-in user | Upload PDF and extract fields only |
+| `GET` | `/` | Public | Health check |
+
+### 🔐 Access Control
+
+- **Roles are verified, never trusted from the client.** Admin is a Firebase custom claim; an institution is authorised only while its Firestore record is `ACTIVE`.
+- **Ground-truth records are owned.** Each record uploaded via `/uploadMongo` is stamped with the uploading institution, and another institution cannot overwrite it.
+- **Firestore rules** (`firestore.rules`) stop users from approving themselves, granting themselves roles, or reading other users' data.
 
 ---
 
@@ -259,7 +316,6 @@ npm run dev
 - 📱 QR Code verification
 - ✍️ Digital signature support
 - 🤖 AI-powered OCR correction
-- 📊 Advanced analytics dashboard
 - 🏫 University ERP integration
 - 📧 Email verification reports
 - 🌐 Public verification API

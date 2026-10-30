@@ -8,3 +8,10 @@ node_modules/
 .env
 
 backend/.env
+
+# Firebase service-account keys
+*service-account*.json
+
+# Build output
+dist/
+.pytest_cache/

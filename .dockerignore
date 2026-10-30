@@ -1,0 +1,11 @@
+.git
+node_modules
+dist
+**/__pycache__
+**/.pytest_cache
+.venv
+backend/.venv
+# Secrets never go into images; compose passes them at runtime
+.env
+backend/.env
+**/*service-account*.json
