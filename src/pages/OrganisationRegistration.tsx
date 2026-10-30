@@ -51,7 +51,7 @@ export const OrganisationRegistration: React.FC<OrganisationRegistrationProps> =
       // ASSUMPTION: The API service has a function `registerOrganisation`
       await api.registerOrganisation(dataToSubmit);
 
-      setMsg('Registration successful! You can now sign in on the login page.');
+      setMsg('Registration submitted! You can sign in once an administrator approves your organisation.');
       // After a short delay, navigate to the login page
       setTimeout(() => {
         onNavigate('login');

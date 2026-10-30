@@ -117,7 +117,12 @@ export const api = {
     }
 
     const org = await findOwnedDoc("organisations", user.uid);
-    if (org) return { ...base, role: UserRole.ORGANISATION, name: (org.data() as Organisation).name, id: org.id };
+    if (org) {
+      const data = org.data() as Organisation;
+      if (data.status === "PENDING") throw new Error("Your organisation is pending approval.");
+      if (data.status === "REJECTED") throw new Error("Your organisation request was rejected.");
+      return { ...base, role: UserRole.ORGANISATION, name: data.name, id: org.id };
+    }
 
     return { ...base, role: UserRole.USER };
   },
@@ -234,6 +239,22 @@ export const api = {
 
   deleteInstitution: async (id: string) => {
     await deleteDoc(doc(db, "institutions", id));
+    return true;
+  },
+
+  // ── ORGANISATION LIST (admin) ──────────────────────────────────────────
+  getAllOrganisations: async () => {
+    const snapshot = await getDocs(collection(db, "organisations"));
+    return snapshot.docs.map(d => ({ id: d.id, ...d.data() })) as FixedOrganisation[];
+  },
+
+  updateOrganisationStatus: async (id: string, status: "ACTIVE" | "REJECTED") => {
+    await updateDoc(doc(db, "organisations", id), { status });
+    return true;
+  },
+
+  deleteOrganisation: async (id: string) => {
+    await deleteDoc(doc(db, "organisations", id));
     return true;
   },
 
